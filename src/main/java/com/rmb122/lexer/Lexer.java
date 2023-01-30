@@ -55,6 +55,11 @@ public class Lexer {
                 currPos += matchResult.length;
             }
         } while (matchResult != null);
+
+        if (currPos != input.length()) {
+            throw new LexerError(String.format("invalid input at pos %d", currPos));
+        }
+
         return tokens;
     }
 
@@ -63,10 +68,11 @@ public class Lexer {
         lexer.addToken("if", new Token("IF", 0));
         lexer.addToken("else", new Token("ELSE", 0));
         lexer.addToken("[\n\r\t ]+", new Token("BLANK", 0));
-        lexer.addToken("[0-9]+", new Token("NUMBER", 1));
+        lexer.addToken("[0-9]+(\\.[0-9]+)?", new Token("NUMBER", 1));
         lexer.addToken("[A-Za-z_][A-Za-z0-9_]*", new Token("ID", 1));
+        lexer.addToken("\"(\\\\.|[])+\"", new Token("STRING", 1));
 
         lexer.compile();
-        System.out.println(Arrays.toString(lexer.scan("ifelse if else asd 0    ").toArray()));
+        System.out.println(Arrays.toString(lexer.scan("ifelse if else asd 0.1 0.2 0.1123123 1.1 asdasd   \n ").toArray()));
     }
 }

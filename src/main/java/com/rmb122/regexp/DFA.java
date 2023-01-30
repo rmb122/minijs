@@ -1,5 +1,7 @@
 package com.rmb122.regexp;
 
+import org.apache.commons.text.StringEscapeUtils;
+
 import java.util.HashMap;
 import java.util.HashSet;
 
@@ -102,13 +104,21 @@ public class DFA<C> {
             State<C> currState = workList.iterator().next();
             workList.remove(currState);
             visitedState.add(currState);
+            String label = String.valueOf(currState.id);
+            if (currState.start) {
+                label += "\\n[start]";
+            }
+            if (currState.end) {
+                label += "\\n[end]";
+            }
+            sb.append("\t").append(currState.id).append(String.format(" [label=\"%s\"];\n", label));
 
             for (Rune r : currState.edges.keySet()) {
                 State<C> targetState = currState.edges.get(r);
                 if (!visitedState.contains(targetState)) {
                     workList.add(targetState);
                 }
-                sb.append("\t").append(currState.id).append(" -> ").append(targetState.id).append(String.format(" [label=\"%s\"]\n", r.toString().replace("\"", "\\\"")));
+                sb.append("\t").append(currState.id).append(" -> ").append(targetState.id).append(String.format(" [label=\"%s\"];\n", StringEscapeUtils.escapeJava(r.toString())));
             }
         }
 

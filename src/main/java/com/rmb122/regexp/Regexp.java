@@ -50,5 +50,14 @@ public class Regexp<C> {
     public static void main(String[] args) throws Exception {
         Regexp<Void> r = Regexp.compile(".*aax?aaaz[A-Za![]cd+zxc.*asd", RegexpOption.DEBUG);
         System.out.println(r.matchString("aaxaaaz!cddddddzxc !! asd"));
+
+        r = Regexp.compile("[0-9]+(\\.[0-9]+)?", RegexpOption.DEBUG);
+        System.out.println(r.matchString("0.123"));
+
+        r = Regexp.compile("(\\\\.|.)+", RegexpOption.DEBUG);
+        System.out.println(r.matchString("aa\\assdd"));
+
+        r = Regexp.compile(".*aaaabbbzxcaaa.*", RegexpOption.DEBUG);
+        System.out.println(r.matchString("asd"));
     }
 }

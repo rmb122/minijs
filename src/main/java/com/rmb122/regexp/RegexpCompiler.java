@@ -22,16 +22,6 @@ public class RegexpCompiler<C> {
         NFA.State<C> endState;
     }
 
-    private static class RuneRange {
-        Rune startRune;
-        Rune endRune;
-
-        public RuneRange(Rune startRune, Rune endRune) {
-            this.startRune = startRune;
-            this.endRune = endRune;
-        }
-    }
-
     public static <C> NFAStatePair<C> compile(String pattern, RegexpOption... options) throws RegexpCompileError {
         RegexpCompiler<C> compiler = new RegexpCompiler<>();
         compiler.options = new HashSet<>(Arrays.asList(options));
@@ -89,16 +79,25 @@ public class RegexpCompiler<C> {
             char currChar = iterator.current();
             if (currChar == '|') {
                 iterator.next(); // 吃掉 '|'
+
+                // 类似 "asdxx|", | 在最后一个的特殊情况, 匹配空字符串
+                if (iterator.current() == CharacterIterator.DONE) {
+                    statePair.startState.addEdge(Rune.EMPTY_CHAR, statePair.endState);
+                }
             } else {
                 break;
             }
         }
 
-        for (NFAStatePair<C> pair : termStatePairs) {
-            statePair.startState.addEdge(Rune.EMPTY_CHAR, pair.startState);
-            pair.endState.addEdge(Rune.EMPTY_CHAR, statePair.endState);
+        if (termStatePairs.size() == 0) {
+            // 正则为空的特殊情况
+            statePair.startState.addEdge(Rune.EMPTY_CHAR, statePair.endState);
+        } else {
+            for (NFAStatePair<C> pair : termStatePairs) {
+                statePair.startState.addEdge(Rune.EMPTY_CHAR, pair.startState);
+                pair.endState.addEdge(Rune.EMPTY_CHAR, statePair.endState);
+            }
         }
-
         return statePair;
     }
 
@@ -190,6 +189,20 @@ public class RegexpCompiler<C> {
                         throw new RegexpCompileError(String.format("invalid hex escape at regexp pos %d", iterator.getIndex()));
                     }
                     currChar = (char) Integer.parseInt(String.copyValueOf(new char[]{hex1, hex2}), 16);
+                }
+                case 'u' -> {
+                    char hex1 = iterator.next();  // u
+                    char hex2 = iterator.next();  // hex1
+                    char hex3 = iterator.next();  // hex2
+                    char hex4 = iterator.next();  // hex3
+
+                    if (hex1 == CharacterIterator.DONE || hex2 == CharacterIterator.DONE ||
+                            hex3 == CharacterIterator.DONE || hex4 == CharacterIterator.DONE ||
+                            !(hexDigest.contains(hex1) && hexDigest.contains(hex2) && hexDigest.contains(hex3) && hexDigest.contains(hex4))
+                    ) {
+                        throw new RegexpCompileError(String.format("invalid unicode escape at regexp pos %d", iterator.getIndex()));
+                    }
+                    currChar = (char) Integer.parseInt(String.copyValueOf(new char[]{hex1, hex2, hex3, hex4}), 16);
                 }
             }
 

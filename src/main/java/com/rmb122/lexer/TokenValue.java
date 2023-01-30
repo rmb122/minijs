@@ -11,10 +11,7 @@ public class TokenValue {
 
     @Override
     public String toString() {
-        return "TokenValue{" +
-                "token=" + token +
-                ", value='" + value + '\'' +
-                '}';
+        return this.token.toString() + "@" + value;
     }
 }
 
