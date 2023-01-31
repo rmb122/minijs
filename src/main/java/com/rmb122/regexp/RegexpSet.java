@@ -6,11 +6,11 @@ import java.util.List;
 public class RegexpSet<C> {
     NFA<C> nfa = new NFA<>();
     DFA<C> dfa;
-    NFA.State<C> nfaStartState = this.nfa.newState();
     HashSet<RegexpOption> options;
 
     public RegexpSet(RegexpOption... options) {
         this.options = new HashSet<>(List.of(options));
+        this.nfa.startState = this.nfa.newState();
     }
 
     public void addPattern(String pattern, C c) throws RegexpCompileError {
@@ -18,11 +18,15 @@ public class RegexpSet<C> {
         statePair.endState.end = true;
         statePair.endState.container = c;
 
-        nfaStartState.addEdge(Rune.EMPTY_CHAR, statePair.startState);
+        this.nfa.startState.addEdge(Rune.EMPTY_CHAR, statePair.startState);
     }
 
     public void compile() throws RegexpCompileError {
-        this.dfa = DFA.fromNFA(nfaStartState);
+        this.dfa = DFA.fromNFA(this.nfa);
+        if (this.options.contains(RegexpOption.DEBUG)) {
+            System.out.println(this.nfa.generateDOTFile());
+            System.out.println(this.dfa.generateDOTFile());
+        }
     }
 
     public RegexpMatchResult<C> matchNext(String input, int startPos) {
@@ -34,9 +38,7 @@ public class RegexpSet<C> {
             char currChar = input.charAt(currPos);
             DFA.State<C> nextState = currState.getEdge(new Rune(currChar));
             if (nextState == null) {
-                if (this.options.contains(RegexpOption.DOT_ALL) || currChar != '\n') {
-                    nextState = currState.getEdge(Rune.ANY_CHAR);
-                }
+                nextState = currState.getEdge(Rune.ANY_CHAR);
             }
 
             if (nextState == null) {

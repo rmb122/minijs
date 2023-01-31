@@ -1,10 +1,14 @@
 package com.rmb122.regexp;
 
+import org.apache.commons.text.StringEscapeUtils;
+
 import java.util.HashMap;
 import java.util.HashSet;
 
 public class NFA<C> {
     private int uniqueID = 0;
+    State<C> startState;
+    public HashSet<State<C>> STOP_STATE = new HashSet<>();
 
     public static class State<C> {
         int id;
@@ -23,8 +27,16 @@ public class NFA<C> {
             l.add(s);
         }
 
+        public void setEdge(Rune r, HashSet<State<C>> s) {
+            this.edges.put(r, s);
+        }
+
         public HashSet<State<C>> getEdge(Rune r) {
             return edges.getOrDefault(r, new HashSet<>());
+        }
+
+        public boolean edgeExists(Rune r) {
+            return edges.containsKey(r);
         }
 
         public HashSet<State<C>> getClosureSet() {
@@ -65,7 +77,7 @@ public class NFA<C> {
         return new State<C>(this.uniqueID);
     }
 
-    public static <C> HashSet<Rune> getPossibleRunes(HashSet<State<C>> states) {
+    public HashSet<Rune> getPossibleRunes(HashSet<State<C>> states) {
         HashSet<Rune> runes = new HashSet<>();
         for (State<C> state : states) {
             for (State<C> equalState : state.getClosureSet()) {
@@ -78,28 +90,33 @@ public class NFA<C> {
         return runes;
     }
 
-    public static <C> HashSet<State<C>> getNextStates(HashSet<State<C>> states, Rune r) {
+    public HashSet<State<C>> getNextStates(HashSet<State<C>> states, Rune r) {
         // 非 . 字符可以走 . 的边
         // 这样在 DFA 匹配时, 检测字符是否存在, 不存在再走 ., 如果存在则不走 .
+        // 但是如果非 . 字符的目标是 STOP_STATE, 停止匹配 ANY_CHAR
 
         HashSet<State<C>> nextStates = new HashSet<>();
         for (State<C> state : states) {
             for (State<C> equalState : state.getClosureSet()) {
-                nextStates.addAll(equalState.getEdge(r));
-                if (r != Rune.ANY_CHAR) {
-                    nextStates.addAll(equalState.getEdge(Rune.ANY_CHAR));
+                HashSet<State<C>> targetStates = equalState.getEdge(r);
+                if (targetStates != this.STOP_STATE) {
+                    nextStates.addAll(targetStates);
+                    if (r != Rune.ANY_CHAR) {
+                        nextStates.addAll(equalState.getEdge(Rune.ANY_CHAR));
+                    }
                 }
             }
         }
         return nextStates;
     }
 
-    public static <C> String generateDOTFile(State<C> startState) {
+    public String generateDOTFile() {
         StringBuilder sb = new StringBuilder("digraph NFA {\n");
+        sb.append("\tSTOP [label=\"[STOP]\"]\n");
 
         HashSet<State<C>> visitedState = new HashSet<>();
         HashSet<State<C>> workList = new HashSet<>();
-        workList.add(startState);
+        workList.add(this.startState);
 
         while (!workList.isEmpty()) {
             State<C> currState = workList.iterator().next();
@@ -108,19 +125,24 @@ public class NFA<C> {
 
             String label = String.valueOf(currState.id);
             if (currState.start) {
-                label += "\\n[start]";
+                label += "\\n[START]";
             }
             if (currState.end) {
-                label += "\\n[end]";
+                label += "\\n[END]";
             }
             sb.append("\t").append(currState.id).append(String.format(" [label=\"%s\"];\n", label));
 
             for (Rune r : currState.edges.keySet()) {
-                for (State<C> targetState : currState.edges.get(r)) {
-                    if (!visitedState.contains(targetState)) {
-                        workList.add(targetState);
+                HashSet<State<C>> targetStates = currState.edges.get(r);
+                if (targetStates != this.STOP_STATE) {
+                    for (State<C> targetState : targetStates) {
+                        if (!visitedState.contains(targetState)) {
+                            workList.add(targetState);
+                        }
+                        sb.append("\t").append(currState.id).append(" -> ").append(targetState.id).append(String.format(" [label=\"%s\"];\n", StringEscapeUtils.escapeJava(StringEscapeUtils.escapeJava(r.toString()))));
                     }
-                    sb.append("\t").append(currState.id).append(" -> ").append(targetState.id).append(String.format(" [label=\"%s\"];\n", r.toString().replace("\"", "\\\"")));
+                } else {
+                    sb.append("\t").append(currState.id).append(" -> ").append("STOP").append(String.format(" [label=\"%s\"];\n", StringEscapeUtils.escapeJava(StringEscapeUtils.escapeJava(r.toString()))));
                 }
             }
         }

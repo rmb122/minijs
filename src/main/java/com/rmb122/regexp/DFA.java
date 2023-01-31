@@ -7,6 +7,7 @@ import java.util.HashSet;
 
 public class DFA<C> {
     private int uniqueID = 0;
+    State<C> startState;
 
     public static class State<C> {
         int id;
@@ -47,21 +48,19 @@ public class DFA<C> {
         }
     }
 
-    State<C> startState;
-
     public State<C> newState(HashSet<NFA.State<C>> nfaStates) {
         this.uniqueID++;
         return new State<C>(this.uniqueID, nfaStates);
     }
 
-    public static <C> DFA<C> fromNFA(NFA.State<C> startState) throws RegexpCompileError {
+    public static <C> DFA<C> fromNFA(NFA<C> nfa) throws RegexpCompileError {
         DFA<C> dfa = new DFA<C>();
 
         HashMap<HashSet<NFA.State<C>>, State<C>> existedStates = new HashMap<>();
         HashSet<State<C>> visitedState = new HashSet<>();
         HashSet<State<C>> workList = new HashSet<>();
 
-        HashSet<NFA.State<C>> nfaStartClosureSet = startState.getClosureSet();
+        HashSet<NFA.State<C>> nfaStartClosureSet = nfa.startState.getClosureSet();
         dfa.startState = dfa.newState(nfaStartClosureSet);
         dfa.startState.start = true;
 
@@ -74,9 +73,9 @@ public class DFA<C> {
             workList.remove(currState);
             visitedState.add(currState);
 
-            HashSet<Rune> edgeRunes = NFA.getPossibleRunes(currState.nfaStates);
+            HashSet<Rune> edgeRunes = nfa.getPossibleRunes(currState.nfaStates);
             for (Rune r : edgeRunes) {
-                HashSet<NFA.State<C>> nextStates = NFA.getNextStates(currState.nfaStates, r);
+                HashSet<NFA.State<C>> nextStates = nfa.getNextStates(currState.nfaStates, r);
                 State<C> dfaState = existedStates.get(nextStates);
                 if (dfaState == null) {
                     dfaState = dfa.newState(nextStates);
@@ -93,23 +92,24 @@ public class DFA<C> {
         return dfa;
     }
 
-    public static <C> String generateDOTFile(State<C> startState) {
+    public String generateDOTFile() {
         StringBuilder sb = new StringBuilder("digraph DFA {\n");
 
         HashSet<State<C>> visitedState = new HashSet<>();
         HashSet<State<C>> workList = new HashSet<>();
-        workList.add(startState);
+        workList.add(this.startState);
 
         while (!workList.isEmpty()) {
             State<C> currState = workList.iterator().next();
             workList.remove(currState);
             visitedState.add(currState);
             String label = String.valueOf(currState.id);
+
             if (currState.start) {
-                label += "\\n[start]";
+                label += "\\n[START]";
             }
             if (currState.end) {
-                label += "\\n[end]";
+                label += "\\n[END]";
             }
             sb.append("\t").append(currState.id).append(String.format(" [label=\"%s\"];\n", label));
 
@@ -118,7 +118,7 @@ public class DFA<C> {
                 if (!visitedState.contains(targetState)) {
                     workList.add(targetState);
                 }
-                sb.append("\t").append(currState.id).append(" -> ").append(targetState.id).append(String.format(" [label=\"%s\"];\n", StringEscapeUtils.escapeJava(r.toString())));
+                sb.append("\t").append(currState.id).append(" -> ").append(targetState.id).append(String.format(" [label=\"%s\"];\n", StringEscapeUtils.escapeJava(StringEscapeUtils.escapeJava(r.toString()))));
             }
         }
 

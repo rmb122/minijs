@@ -16,13 +16,12 @@ public class Regexp<C> {
         regexp.options = new HashSet<>(Arrays.asList(options));
         regexp.pattern = pattern;
 
-        RegexpCompiler.NFAStatePair<Void> statePair = RegexpCompiler.compile(pattern, options);
-        statePair.endState.end = true;
-
-        regexp.dfa = DFA.fromNFA(statePair.startState);
+        NFA<Void> nfa = RegexpCompiler.compile(pattern, options);
+        regexp.dfa = DFA.fromNFA(nfa);
 
         if (regexp.options.contains(RegexpOption.DEBUG)) {
-            System.out.println(DFA.generateDOTFile(regexp.dfa.startState));
+            System.out.println(nfa.generateDOTFile());
+            System.out.println(regexp.dfa.generateDOTFile());
         }
         return regexp;
     }
@@ -34,9 +33,7 @@ public class Regexp<C> {
             char currChar = s.charAt(i);
             DFA.State<C> nextState = currState.getEdge(new Rune(currChar));
             if (nextState == null) {
-                if (this.options.contains(RegexpOption.DOT_ALL) || currChar != '\n') {
-                    nextState = currState.getEdge(Rune.ANY_CHAR);
-                }
+                nextState = currState.getEdge(Rune.ANY_CHAR);
             }
             currState = nextState;
             if (currState == null) {
@@ -57,7 +54,7 @@ public class Regexp<C> {
         r = Regexp.compile("(\\\\.|.)+", RegexpOption.DEBUG);
         System.out.println(r.matchString("aa\\assdd"));
 
-        r = Regexp.compile(".*aaaabbbzxcaaa.*", RegexpOption.DEBUG);
-        System.out.println(r.matchString("asd"));
+        r = Regexp.compile(".*aa[^a]aabbbzxcaaa.*", RegexpOption.DEBUG);
+        System.out.println(r.matchString("aaaaabbbzxcaaa"));
     }
 }

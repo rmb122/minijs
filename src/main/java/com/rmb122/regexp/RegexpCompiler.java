@@ -22,7 +22,7 @@ public class RegexpCompiler<C> {
         NFA.State<C> endState;
     }
 
-    public static <C> NFAStatePair<C> compile(String pattern, RegexpOption... options) throws RegexpCompileError {
+    public static <C> NFA<C> compile(String pattern, RegexpOption... options) throws RegexpCompileError {
         RegexpCompiler<C> compiler = new RegexpCompiler<>();
         compiler.options = new HashSet<>(Arrays.asList(options));
         compiler.pattern = pattern;
@@ -41,10 +41,9 @@ public class RegexpCompiler<C> {
             throw new RegexpCompileError("extra data at regexp tail found");
         }
 
-        if (compiler.options.contains(RegexpOption.DEBUG)) {
-            System.out.println(NFA.generateDOTFile(statePair.startState));
-        }
-        return statePair;
+        statePair.endState.end = true;
+        compiler.nfa.startState = statePair.startState;
+        return compiler.nfa;
     }
 
     public static <C> NFAStatePair<C> compileWithNFA(NFA<C> nfa, String pattern, RegexpOption... options) throws RegexpCompileError {
@@ -58,10 +57,6 @@ public class RegexpCompiler<C> {
         NFAStatePair<C> statePair = compiler.parseExpr(iterator);
         if (iterator.getIndex() != iterator.getEndIndex()) {
             throw new RegexpCompileError("extra data at regexp tail found");
-        }
-
-        if (compiler.options.contains(RegexpOption.DEBUG)) {
-            System.out.println(NFA.generateDOTFile(statePair.startState));
         }
         return statePair;
     }
@@ -113,6 +108,7 @@ public class RegexpCompiler<C> {
             if (currChar == '*') {
                 iterator.next(); // 吃掉 '*'
                 NFA.State<C> nextState = this.nfa.newState();
+                // 检测 a** 的情况
                 if (factorStatePair.startState == factorStatePair.endState) {
                     throw new RegexpCompileError(String.format("invalid '*' at regexp pos %d", iterator.getIndex()));
                 }
@@ -166,6 +162,7 @@ public class RegexpCompiler<C> {
     }
 
     private Rune readRune(StringCharacterIterator iterator, boolean dotAsAny) throws RegexpCompileError {
+        // dotAsAny 指示是否在 group [A-z.] 中. 在 group 中 . 不代表 ANY_CHAR
         char currChar = iterator.current();
         iterator.next(); // 吃掉当前匹配的字符
 
@@ -244,8 +241,13 @@ public class RegexpCompiler<C> {
                     throw new RegexpCompileError(String.format("expecting ']' at regexp pos %d", iterator.getIndex()));
                 }
             }
+            // 如果是除了 (, [ 之外的特殊符号, 返回一个空的状态
         } else {
             Rune rune = this.readRune(iterator, true);
+            if (rune == Rune.ANY_CHAR && !this.options.contains(RegexpOption.DOT_ALL)) {
+                // 不是 DOT_ALL, 开一条边 \n 通向 STOP_STATE
+                currState.setEdge(new Rune('\n'), this.nfa.STOP_STATE);
+            }
             NFA.State<C> nextState = this.nfa.newState();
             currState.addEdge(rune, nextState);
             currState = nextState;
@@ -257,10 +259,17 @@ public class RegexpCompiler<C> {
 
     private NFAStatePair<C> parseGroup(StringCharacterIterator iterator) throws RegexpCompileError {
         NFAStatePair<C> statePair = new NFAStatePair<>();
+        boolean notMatch = false;
         statePair.startState = this.nfa.newState();
         statePair.endState = this.nfa.newState();
 
         HashSet<Rune> runeSet = new HashSet<>();
+
+        if (iterator.current() == '^') {
+            // [^a] 第一个是 ^ 匹配除了集合之外的字符
+            notMatch = true;
+            iterator.next();
+        }
 
         while (iterator.current() != CharacterIterator.DONE) {
             char currChar = iterator.current();
@@ -283,10 +292,19 @@ public class RegexpCompiler<C> {
             }
         }
 
-        for (Rune rune : runeSet) {
-            statePair.startState.addEdge(rune, statePair.endState);
-        }
+        if (!notMatch) {
+            // 匹配集合内的字符
+            for (Rune rune : runeSet) {
+                statePair.startState.addEdge(rune, statePair.endState);
+            }
+        } else {
+            // 匹配集合外的字符
+            statePair.startState.addEdge(Rune.ANY_CHAR, statePair.endState);
 
+            for (Rune rune : runeSet) {
+                statePair.startState.setEdge(rune, this.nfa.STOP_STATE);
+            }
+        }
         return statePair;
     }
 }
