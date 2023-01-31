@@ -284,7 +284,7 @@ public class RegexpCompiler<C> {
                 }
 
                 Rune endRune = this.readRune(iterator, false);
-                for (int i = currRune.c; i < endRune.c; i++) {
+                for (int i = currRune.c; i <= endRune.c; i++) {
                     runeSet.add(new Rune((char) i));
                 }
             } else {

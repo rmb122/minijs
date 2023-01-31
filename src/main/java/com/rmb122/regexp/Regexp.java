@@ -56,5 +56,18 @@ public class Regexp<C> {
 
         r = Regexp.compile(".*aa[^a]aabbbzxcaaa.*", RegexpOption.DEBUG);
         System.out.println(r.matchString("aaaaabbbzxcaaa"));
+
+        r = Regexp.compile(".*aa[^!A-Z]+aabbbzxcaaa.*", RegexpOption.DEBUG);
+        System.out.println(r.matchString("aa[11Z23]aabbbzxcaaa"));
+        System.out.println(r.matchString("aa[11!23]aabbbzxcaaa"));
+        System.out.println(r.matchString("aa[11~23]aabbbzxcaaa"));
+
+        r = Regexp.compile(".*aa[^!A-Z]+aabbbzxcaaa.*");
+        System.out.println(r.matchString("aa[11~23]aabbbzxcaaa asdasd \n asdas"));
+        System.out.println(r.matchString("aa[11~23]aabbbzxcaaa asdasd \t asdas"));
+
+        r = Regexp.compile(".*aa[^!A-Z]+aabbbzxcaaa.*", RegexpOption.DOT_ALL);
+        System.out.println(r.matchString("aa[11~23]aabbbzxcaaa asdasd \n asdas"));
+        System.out.println(r.matchString("aa[11~23]aabbbzxcaaa asdasd \t asdas"));
     }
 }
