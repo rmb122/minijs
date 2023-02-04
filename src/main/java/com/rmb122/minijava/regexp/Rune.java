@@ -1,4 +1,4 @@
-package com.rmb122.regexp;
+package com.rmb122.minijava.regexp;
 
 public class Rune {
     public static Rune ANY_CHAR = new Rune("ANY");

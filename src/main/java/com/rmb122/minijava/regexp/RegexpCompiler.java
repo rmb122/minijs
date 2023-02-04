@@ -1,4 +1,4 @@
-package com.rmb122.regexp;
+package com.rmb122.minijava.regexp;
 
 import java.text.CharacterIterator;
 import java.text.StringCharacterIterator;

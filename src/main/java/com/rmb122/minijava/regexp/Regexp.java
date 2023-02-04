@@ -1,4 +1,4 @@
-package com.rmb122.regexp;
+package com.rmb122.minijava.regexp;
 
 import java.util.Arrays;
 import java.util.HashSet;

@@ -1,4 +1,4 @@
-package com.rmb122.lexer;
+package com.rmb122.minijava.lexer;
 
 public class TokenValue {
     Token token;

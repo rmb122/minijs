@@ -1,9 +1,9 @@
-package com.rmb122.lexer;
+package com.rmb122.minijava.lexer;
 
-import com.rmb122.regexp.RegexpCompileError;
-import com.rmb122.regexp.RegexpMatchResult;
-import com.rmb122.regexp.RegexpOption;
-import com.rmb122.regexp.RegexpSet;
+import com.rmb122.minijava.regexp.RegexpCompileError;
+import com.rmb122.minijava.regexp.RegexpMatchResult;
+import com.rmb122.minijava.regexp.RegexpOption;
+import com.rmb122.minijava.regexp.RegexpSet;
 
 import java.util.ArrayList;
 import java.util.Arrays;

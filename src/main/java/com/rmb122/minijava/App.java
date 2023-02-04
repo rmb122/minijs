@@ -1,4 +1,4 @@
-package com.rmb122;
+package com.rmb122.minijava;
 
 /**
  * Hello world!
