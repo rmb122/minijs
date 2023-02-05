@@ -96,25 +96,32 @@ public class Parser {
             for (Production production : productionMap.get(headSymbol)) {
                 NFA.State currState = symbolStartState.get(headSymbol);
 
-                for (int i = 0; i < production.body.size(); i++) {
-                    Symbol currSymbol = production.body.get(i);
-                    NFA.State newState = nfa.newState();
-                    currState.addEdge(currSymbol, newState);
+                if (production.body.size() != 0) {
+                    for (int i = 0; i < production.body.size(); i++) {
+                        Symbol currSymbol = production.body.get(i);
+                        NFA.State newState = nfa.newState();
+                        currState.addEdge(currSymbol, newState);
 
-                    if (!currSymbol.terminating) {
-                        if (!symbolStartState.containsKey(currSymbol)) {
-                            throw new ParserError(String.format("symbol %s should have at least one production", currSymbol));
+                        if (!currSymbol.terminating) {
+                            if (!symbolStartState.containsKey(currSymbol)) {
+                                throw new ParserError(String.format("symbol %s should have at least one production", currSymbol));
+                            }
+
+                            currState.addEdge(Symbol.EMPTY_SYMBOL, symbolStartState.get(currSymbol));
                         }
 
-                        currState.addEdge(Symbol.EMPTY_SYMBOL, symbolStartState.get(currSymbol));
-                    }
+                        if (i == production.body.size() - 1) {
+                            newState.end = true;
+                            newState.reduceProduction = production;
+                        }
 
-                    if (i == production.body.size() - 1) {
-                        newState.end = true;
-                        newState.reduceProduction = production;
+                        currState = newState;
                     }
-
-                    currState = newState;
+                } else {
+                    // 空产生式, 代表这个符号可以为空
+                    currState.addEdge(Symbol.EMPTY_SYMBOL, currState);
+                    currState.end = true;
+                    currState.reduceProduction = production;
                 }
             }
         }
@@ -250,6 +257,15 @@ public class Parser {
 
             ParserState currState = stateStack.peek();
             ParserAction action = this.getAction(currState.dfaState, currSymbol);
+
+            if (action == null) {
+                if (currTokenValue != null) {
+                    throw new ParserError(String.format("invalid syntax at line %d, col %d", currTokenValue.getLineNum(), currTokenValue.getColNum()));
+                } else {
+                    throw new ParserError("unexpected EOF");
+                }
+            }
+
             switch (action.type) {
                 case SHIFT -> {
                     stateStack.push(new ParserState(action.gotoState, currSymbol, currTokenValue, new AST(currSymbol, null, currTokenValue)));
@@ -288,6 +304,40 @@ public class Parser {
         }
 
         return stateStack.peek().ast;
+    }
+
+    private static void testLR0() throws Exception {
+        Lexer lexer = new Lexer();
+        Parser parser = new Parser();
+
+        Token a = new Token("a");
+        Token c = new Token("c");
+        Token e = new Token("e");
+        Token b = new Token("b");
+        Token d = new Token("d");
+
+        lexer.addToken("a", a);
+        lexer.addToken("c", c);
+        lexer.addToken("e", e);
+        lexer.addToken("b", b);
+        lexer.addToken("d", d);
+
+        lexer.compile();
+
+        Symbol S = new Symbol("S");
+        Symbol A = new Symbol("A");
+        Symbol B = new Symbol("B");
+
+        parser.addProduction(new Production(S, a.asSymbol(), A, c.asSymbol(), B, e.asSymbol()));
+        parser.addProduction(new Production(A, b.asSymbol()));
+        parser.addProduction(new Production(A, A, b.asSymbol()));
+        parser.addProduction(new Production(B, d.asSymbol()));
+
+        parser.setStartSymbol(S);
+        parser.compile();
+        parser.generateParserTableCsv();
+        AST result = parser.parse(lexer.scan("abbcde"));
+        System.out.println(result);
     }
 
     public static void main(String[] args) throws Exception {
@@ -336,17 +386,12 @@ public class Parser {
         parser.compile();
         parser.parse(lexer.scan("1+1"));
          */
+
         Token a = new Token("a");
-        Token c = new Token("c");
-        Token e = new Token("e");
         Token b = new Token("b");
-        Token d = new Token("d");
 
         lexer.addToken("a", a);
-        lexer.addToken("c", c);
-        lexer.addToken("e", e);
         lexer.addToken("b", b);
-        lexer.addToken("d", d);
 
         lexer.compile();
 
@@ -354,15 +399,16 @@ public class Parser {
         Symbol A = new Symbol("A");
         Symbol B = new Symbol("B");
 
-        parser.addProduction(new Production(S, a.asSymbol(), A, c.asSymbol(), B, e.asSymbol()));
-        parser.addProduction(new Production(A, b.asSymbol()));
-        parser.addProduction(new Production(A, A, b.asSymbol()));
-        parser.addProduction(new Production(B, d.asSymbol()));
+        parser.addProduction(new Production(S, A, B));
+        parser.addProduction(new Production(A, a.asSymbol(), B, a.asSymbol()));
+        parser.addProduction(new Production(A));
+        parser.addProduction(new Production(B, b.asSymbol(), A, b.asSymbol()));
+        parser.addProduction(new Production(B));
 
         parser.setStartSymbol(S);
         parser.compile();
         parser.generateParserTableCsv();
-        AST result = parser.parse(lexer.scan("abbcde"));
+        AST result = parser.parse(lexer.scan("baab"));
         System.out.println(result);
     }
 }
