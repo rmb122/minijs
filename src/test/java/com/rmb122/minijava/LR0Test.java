@@ -65,6 +65,6 @@ public class LR0Test extends TestCase {
         parser.generateParserTableCsv();
 
         AST result = parser.parse(lexer.scan("abbcde"));
-        System.out.println(result);
+        System.out.println(result.generateDOTFile());
     }
 }

@@ -2,6 +2,7 @@ package com.rmb122.minijava.parser;
 
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.stream.Collectors;
 
 public class NFA {
     private int uniqueID = 0;
@@ -12,7 +13,7 @@ public class NFA {
         boolean start;
         boolean end;
         // 规约产生式
-        Production reduceProduction;
+        HashSet<ProductionLookahead> productionLookaheads = new HashSet<>();
         private final HashMap<Symbol, HashSet<State>> edges = new HashMap<>();
         private HashSet<State> closureSet;
 
@@ -113,9 +114,7 @@ public class NFA {
             if (currState.start) {
                 label += "\\n[START]";
             }
-            if (currState.end) {
-                label += String.format("\\n%s", currState.reduceProduction.toString());
-            }
+            label += String.format("\\n%s", currState.productionLookaheads.stream().map(ProductionLookahead::toString).collect(Collectors.joining("\\n")));
             sb.append("\t").append(currState.id).append(String.format(" [label=\"%s\"];\n", label));
 
             for (Symbol symbol : currState.edges.keySet()) {

@@ -54,7 +54,7 @@ public class Parser {
     private void addAction(DFA.State state, Symbol symbol, ParserAction action) throws ParserError {
         HashMap<Symbol, ParserAction> actionLine = this.actionTable.computeIfAbsent(state, k -> new HashMap<>());
         if (actionLine.containsKey(symbol)) {
-            throw new ParserError("not a valid action table / syntax, duplicate entry found");
+            throw new ParserError("not a valid LALR(1) syntax, duplicate action table entry found");
         } else {
             actionLine.put(symbol, action);
         }
@@ -67,7 +67,7 @@ public class Parser {
     private void addGoto(DFA.State state, Symbol symbol, DFA.State targetState) throws ParserError {
         HashMap<Symbol, DFA.State> gotoLine = this.gotoTable.computeIfAbsent(state, k -> new HashMap<>());
         if (gotoLine.containsKey(symbol)) {
-            throw new ParserError("not a valid goto table / syntax, duplicate entry found");
+            throw new ParserError("not a valid LALR(1) syntax, duplicate goto table entry found");
         } else {
             gotoLine.put(symbol, targetState);
         }
@@ -206,6 +206,100 @@ public class Parser {
         } while (changed);
     }
 
+    private void calcProductionLookahead() {
+        // startState 上肯定有增广产生式子, 给它设置 Lookahead 到 EOF_SYMBOL
+        DFA.State startState = this.dfa.startState;
+        for (ProductionLookahead productionLookahead : startState.productionLookaheads) {
+            if (productionLookahead.production.head.equals(Symbol.EXTEND_START_SYMBOL)) {
+                productionLookahead.lookaheadSymbols.add(Symbol.EOF_SYMBOL);
+            }
+        }
+
+        boolean changed;
+        do {
+            changed = false;
+
+            HashSet<DFA.State> workList = new HashSet<>();
+            HashSet<DFA.State> visitedStates = new HashSet<>();
+            workList.add(startState);
+
+            while (!workList.isEmpty()) {
+                DFA.State currState = workList.iterator().next();
+                workList.remove(currState);
+                visitedStates.add(currState);
+
+                HashMap<Symbol, HashSet<ProductionLookahead>> currStateLookaheadsMap = new HashMap<>();
+                for (ProductionLookahead productionLookahead : currState.productionLookaheads) {
+                    currStateLookaheadsMap.computeIfAbsent(productionLookahead.production.head, k -> new HashSet<>()).add(productionLookahead);
+                }
+
+                for (ProductionLookahead productionLookahead : currState.productionLookaheads) {
+                    // closure
+                    if (productionLookahead.index < productionLookahead.production.body.size()) {
+                        Symbol currSymbol = productionLookahead.production.body.get(productionLookahead.index);
+                        // 当前位置在一个非终结符前面, 取这个非终结符为 currSymbol
+                        if (!currSymbol.terminating) {
+                            // 找到这个非终结符对应的产生式, 且产生式在开始位置
+                            Set<ProductionLookahead> waitingProductionLookaheads = currStateLookaheadsMap.computeIfAbsent(currSymbol, k -> new HashSet<>());
+                            waitingProductionLookaheads = ProductionLookahead.findStartProduction(waitingProductionLookaheads);
+
+                            // 需要增加的 lookahead = FIRST(后面的符号 + 当前产生式的 lookahead)
+                            Set<Symbol> newLookaheads = new HashSet<>();
+                            int i = productionLookahead.index + 1;
+
+                            while (i < productionLookahead.production.body.size()) {
+                                Set<Symbol> currFirstSet = this.firstSetGet(productionLookahead.production.body.get(i));
+                                newLookaheads.addAll(currFirstSet);
+
+                                // 存在 EMPTY_SYMBOL, 继续找下一个, 不存在就直接 break
+                                if (currFirstSet.contains(Symbol.EMPTY_SYMBOL)) {
+                                    i++;
+                                } else {
+                                    break;
+                                }
+                            }
+
+                            // 去掉空符号
+                            newLookaheads.remove(Symbol.EMPTY_SYMBOL);
+                            // 到了最后一个, 再加上当前产生式的 lookahead
+                            if (i == productionLookahead.production.body.size()) {
+                                newLookaheads.addAll(productionLookahead.lookaheadSymbols);
+                            }
+
+                            for (ProductionLookahead waitingProductionLookahead : waitingProductionLookaheads) {
+                                for (Symbol newLookahead : newLookaheads) {
+                                    if (!waitingProductionLookahead.lookaheadSymbols.contains(newLookahead)) {
+                                        waitingProductionLookahead.lookaheadSymbols.add(newLookahead);
+                                        changed = true;
+                                    }
+                                }
+                            }
+                        }
+
+                        // goto
+                        // 当前产生式的移位后产生式子继承此产生式的 lookahead
+                        DFA.State nextState = currState.getEdge(currSymbol);
+                        Set<ProductionLookahead> waitingProductionLookaheads = ProductionLookahead.findProduction(nextState.productionLookaheads, productionLookahead.production, productionLookahead.index + 1);
+                        for (ProductionLookahead waitingProductionLookahead : waitingProductionLookaheads) {
+                            for (Symbol newLookahead : productionLookahead.lookaheadSymbols) {
+                                if (!waitingProductionLookahead.lookaheadSymbols.contains(newLookahead)) {
+                                    waitingProductionLookahead.lookaheadSymbols.add(newLookahead);
+                                    changed = true;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                for (DFA.State nextState : currState.getEdges().values()) {
+                    if (!visitedStates.contains(nextState)) {
+                        workList.add(nextState);
+                    }
+                }
+            }
+        } while (changed);
+    }
+
     public void compile() throws ParserError {
         if (this.startSymbol == null) {
             throw new ParserError("startSymbol need to be set");
@@ -230,11 +324,13 @@ public class Parser {
         for (Symbol headSymbol : productionMap.keySet()) {
             for (Production production : productionMap.get(headSymbol)) {
                 NFA.State currState = symbolStartState.get(headSymbol);
+                currState.productionLookaheads.add(new ProductionLookahead(production, 0));
 
                 if (production.body.size() != 0) {
                     for (int i = 0; i < production.body.size(); i++) {
                         Symbol currSymbol = production.body.get(i);
                         NFA.State newState = nfa.newState();
+                        newState.productionLookaheads.add(new ProductionLookahead(production, i + 1));
                         currState.addEdge(currSymbol, newState);
 
                         if (!currSymbol.terminating) {
@@ -247,7 +343,6 @@ public class Parser {
 
                         if (i == production.body.size() - 1) {
                             newState.end = true;
-                            newState.reduceProduction = production;
                         }
 
                         currState = newState;
@@ -256,12 +351,13 @@ public class Parser {
                     // 空产生式, 代表这个符号可以为空
                     currState.addEdge(Symbol.EMPTY_SYMBOL, currState);
                     currState.end = true;
-                    currState.reduceProduction = production;
+                    currState.productionLookaheads.add(new ProductionLookahead(production, 0));
                 }
             }
         }
 
         this.dfa = DFA.fromNFA(nfa);
+        this.calcProductionLookahead();
 
         System.out.println(nfa.generateDOTFile());
         System.out.println(dfa.generateDOTFile());
@@ -270,25 +366,25 @@ public class Parser {
         HashSet<DFA.State> visitedState = new HashSet<>();
         workList.add(this.dfa.startState);
 
+
         while (!workList.isEmpty()) {
             DFA.State currState = workList.iterator().next();
             workList.remove(currState);
             visitedState.add(currState);
 
-            // SLR(1) 实现
+            // LALR(1) 实现
             if (currState.end) {
-                if (currState.reduceProductions.size() == 1 && currState.reduceProductions.iterator().next().head == Symbol.EXTEND_START_SYMBOL) {
-                    // 增广产生式收到 EOF, 产生 ACC
-                    this.addAction(currState, Symbol.EOF_SYMBOL, ParserAction.PARSER_ACTION_ACCEPT);
-                } else {
-                    if (currState.reduceProductions.size() != 1) {
-                        throw new ParserError("not a SLR(1) syntax");
-                    }
+                Set<ProductionLookahead> finishedProduction = ProductionLookahead.findFinishedProduction(currState.productionLookaheads);
 
-                    for (Production production : currState.reduceProductions) {
-                        // SLR1, 只对产生式 head 的 follow 集中的终结符产生规约
-                        for (Symbol symbol : followSetGet(production.head)) {
-                            this.addAction(currState, symbol, new ParserAction(production));
+                for (ProductionLookahead productionLookahead : finishedProduction) {
+                    if (productionLookahead.production.head == Symbol.EXTEND_START_SYMBOL) {
+                        // 增广产生式收到 EOF, 产生 ACC
+                        this.addAction(currState, Symbol.EOF_SYMBOL, ParserAction.PARSER_ACTION_ACCEPT);
+                    } else {
+                        // 其余正常产生式
+                        // LALR(1), 只对产生式 lookahead 集中的终结符产生规约
+                        for (Symbol symbol : productionLookahead.lookaheadSymbols) {
+                            this.addAction(currState, symbol, new ParserAction(productionLookahead.production));
                         }
                     }
                 }
@@ -448,49 +544,6 @@ public class Parser {
         Lexer lexer = new Lexer();
         Parser parser = new Parser();
 
-        /*
-            NUMBER := [0-9]+
-
-            expr := expr '+' term | term
-            term := term '*' factor | factor
-            factor := NUMBER | '(' expr ')'
-         */
-
-        Token number = new Token("NUMBER", 0);
-        Token plus = new Token("PLUS", 0);
-        Token multi = new Token("MULTI", 0);
-        Token lpar = new Token("LPAR", 0);
-        Token rpar = new Token("RPAR", 0);
-        Token blank = new Token("BLANK", 0);
-
-        lexer.addToken("[0-9]+", number);
-        lexer.addToken("\\+", plus);
-        lexer.addToken("\\*", multi);
-        lexer.addToken("\\(", lpar);
-        lexer.addToken("\\)", rpar);
-        lexer.addToken("[\n\r\t ]+", blank, true);
-
-        lexer.compile();
-
-        Symbol expr = new Symbol("expr");
-        Symbol term = new Symbol("term");
-        Symbol factor = new Symbol("factor");
-
-        parser.addProduction(new Production(expr, expr, plus.asSymbol(), term));
-        parser.addProduction(new Production(expr, term));
-
-        parser.addProduction(new Production(term, term, multi.asSymbol(), factor));
-        parser.addProduction(new Production(term, factor));
-
-        parser.addProduction(new Production(factor, number.asSymbol()));
-        parser.addProduction(new Production(factor, lpar.asSymbol(), expr, rpar.asSymbol()));
-
-        parser.setStartSymbol(expr);
-        parser.compile();
-        AST result = parser.parse(lexer.scan("(567 * (3 + 3)) * 123 + 1+1 + 123 * (123 * 12 + (1+2)) "));
-        System.out.println(result.generateDOTFile());
-
-        /*
         Token a = new Token("a");
         Token b = new Token("b");
 
@@ -500,21 +553,16 @@ public class Parser {
         lexer.compile();
 
         Symbol S = new Symbol("S");
-        Symbol A = new Symbol("A");
         Symbol B = new Symbol("B");
 
-        parser.addProduction(new Production(S, A, B));
-        parser.addProduction(new Production(A, a.asSymbol(), B, a.asSymbol()));
-        parser.addProduction(new Production(A));
-        parser.addProduction(new Production(B, b.asSymbol(), A, b.asSymbol()));
-        parser.addProduction(new Production(B));
+        parser.addProduction(new Production(S, B, B));
+        parser.addProduction(new Production(B, a.asSymbol(), B));
+        parser.addProduction(new Production(B, b.asSymbol()));
 
         parser.setStartSymbol(S);
         parser.compile();
         parser.generateParserTableCsv();
-        AST result = parser.parse(lexer.scan("baab"));
-        System.out.println(result);
-
-         */
+        AST result = parser.parse(lexer.scan("abab"));
+        System.out.println(result.generateDOTFile());
     }
 }

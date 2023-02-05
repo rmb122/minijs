@@ -12,7 +12,7 @@ public class DFA {
         int id;
         boolean start;
         boolean end;
-        HashSet<Production> reduceProductions = new HashSet<>();
+        HashSet<ProductionLookahead> productionLookaheads = new HashSet<>();
         private final HashMap<Symbol, State> edges = new HashMap<>();
         public HashSet<NFA.State> nfaStates;
 
@@ -22,9 +22,10 @@ public class DFA {
             this.nfaStates = nfaStates;
             for (NFA.State s : nfaStates) {
                 for (NFA.State equalState : s.getClosureSet()) {
+                    // 注意需要调用 copy(), 否则会共享 lookaheadSymbol
+                    this.productionLookaheads.addAll(equalState.productionLookaheads.stream().map(ProductionLookahead::copy).toList());
                     if (equalState.end) {
                         this.end = true;
-                        this.reduceProductions.add(equalState.reduceProduction);
                     }
                 }
             }
@@ -111,9 +112,7 @@ public class DFA {
             if (currState.start) {
                 label += "\\n[START]";
             }
-            if (currState.end) {
-                label += String.format("\\n%s", currState.reduceProductions.stream().map(Production::toString).collect(Collectors.joining("\\n")));
-            }
+            label += String.format("\\n%s", currState.productionLookaheads.stream().map(ProductionLookahead::toString).collect(Collectors.joining("\\n")));
             sb.append("\t").append(currState.id).append(String.format(" [label=\"%s\"];\n", label));
 
             for (Symbol symbol : currState.edges.keySet()) {
