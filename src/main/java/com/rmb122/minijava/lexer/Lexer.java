@@ -13,6 +13,9 @@ import java.util.List;
 public class Lexer {
     RegexpSet<Token> regexpSet;
     HashSet<Token> tokenSet = new HashSet<>();
+    HashSet<Token> ignoredTokenSet = new HashSet<>();
+    int currLineNum;
+    int currColNum;
 
     public Lexer(RegexpOption... option) {
         this.regexpSet = new RegexpSet<>(option);
@@ -25,6 +28,13 @@ public class Lexer {
 
         tokenSet.add(token);
         regexpSet.addPattern(pattern, token);
+    }
+
+    public void addToken(String pattern, Token token, boolean ignore) throws LexerError, RegexpCompileError {
+        this.addToken(pattern, token);
+        if (ignore) {
+            ignoredTokenSet.add(token);
+        }
     }
 
     public void compile() throws RegexpCompileError {
@@ -53,7 +63,20 @@ public class Lexer {
                     throw new LexerError("empty token set found");
                 }
 
-                tokens.add(new TokenValue(maxPriorityToken, input.substring(currPos, currPos + matchResult.length)));
+                String matchedString = input.substring(currPos, currPos + matchResult.length);
+                if (!ignoredTokenSet.contains(maxPriorityToken)) {
+                    tokens.add(new TokenValue(maxPriorityToken, matchedString, currLineNum, currColNum));
+                }
+
+                for (int i = 0; i < matchedString.length(); i++) {
+                    this.currColNum++;
+
+                    if (matchedString.charAt(i) == '\n') {
+                        this.currLineNum += 1;
+                        this.currColNum = 0;
+                    }
+                }
+
                 currPos += matchResult.length;
             }
         } while (matchResult != null);
@@ -69,7 +92,7 @@ public class Lexer {
         Lexer lexer = new Lexer(RegexpOption.DEBUG);
         lexer.addToken("if", new Token("IF", 0));
         lexer.addToken("else", new Token("ELSE", 0));
-        lexer.addToken("[\n\r\t ]+", new Token("BLANK", 0));
+        lexer.addToken("[\n\r\t ]+", new Token("BLANK", 0), true);
         lexer.addToken("[0-9]+(\\.[0-9]+)?", new Token("NUMBER", 1));
         lexer.addToken("[A-Za-z_][A-Za-z0-9_]*", new Token("ID", 1));
         lexer.addToken("\"(\\\\.|[^\\\\\"\\n])*\"", new Token("STRING", 1));

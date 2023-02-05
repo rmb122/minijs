@@ -23,8 +23,7 @@ public class NFA<C> {
         }
 
         public void addEdge(Rune r, State<C> s) {
-            HashSet<State<C>> l = edges.computeIfAbsent(r, k -> new HashSet<>());
-            l.add(s);
+            edges.computeIfAbsent(r, k -> new HashSet<>()).add(s);
         }
 
         public void setEdge(Rune r, HashSet<State<C>> s) {
