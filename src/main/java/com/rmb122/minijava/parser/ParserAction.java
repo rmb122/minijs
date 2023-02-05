@@ -7,7 +7,7 @@ public class ParserAction {
         ACCEPT,
     }
 
-    public static ParserAction ACCEPT_PARSER_ACTION = new ParserAction(ParserActionType.ACCEPT);
+    public static ParserAction PARSER_ACTION_ACCEPT = new ParserAction(ParserActionType.ACCEPT);
 
     ParserActionType type;
     Production reduceProduction;

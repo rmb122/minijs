@@ -275,27 +275,30 @@ public class Parser {
             workList.remove(currState);
             visitedState.add(currState);
 
-            // LR0 实现
+            // SLR(1) 实现
             if (currState.end) {
                 if (currState.reduceProductions.size() == 1 && currState.reduceProductions.iterator().next().head == Symbol.EXTEND_START_SYMBOL) {
                     // 增广产生式收到 EOF, 产生 ACC
-                    this.addAction(currState, Symbol.EOF_SYMBOL, ParserAction.ACCEPT_PARSER_ACTION);
+                    this.addAction(currState, Symbol.EOF_SYMBOL, ParserAction.PARSER_ACTION_ACCEPT);
                 } else {
-                    for (Symbol symbol : terminalSymbolSet) {
-                        if (currState.reduceProductions.size() != 1 || currState.getEdges().size() != 0) {
-                            // LR0 无法解决规约-移进冲突
-                            throw new ParserError("not a lr0 syntax");
+                    if (currState.reduceProductions.size() != 1) {
+                        throw new ParserError("not a SLR(1) syntax");
+                    }
+
+                    for (Production production : currState.reduceProductions) {
+                        // SLR1, 只对产生式 head 的 follow 集中的终结符产生规约
+                        for (Symbol symbol : followSetGet(production.head)) {
+                            this.addAction(currState, symbol, new ParserAction(production));
                         }
-                        this.addAction(currState, symbol, new ParserAction(currState.reduceProductions.iterator().next()));
                     }
                 }
-            } else {
-                for (Symbol symbol : currState.getEdges().keySet()) {
-                    if (symbol.terminating) {
-                        this.addAction(currState, symbol, new ParserAction(currState.getEdge(symbol)));
-                    } else {
-                        this.addGoto(currState, symbol, currState.getEdge(symbol));
-                    }
+            }
+
+            for (Symbol symbol : currState.getEdges().keySet()) {
+                if (symbol.terminating) {
+                    this.addAction(currState, symbol, new ParserAction(currState.getEdge(symbol)));
+                } else {
+                    this.addGoto(currState, symbol, currState.getEdge(symbol));
                 }
             }
 
@@ -453,7 +456,6 @@ public class Parser {
             factor := NUMBER | '(' expr ')'
          */
 
-        /*
         Token number = new Token("NUMBER", 0);
         Token plus = new Token("PLUS", 0);
         Token multi = new Token("MULTI", 0);
@@ -485,9 +487,10 @@ public class Parser {
 
         parser.setStartSymbol(expr);
         parser.compile();
-        parser.parse(lexer.scan("1+1"));
-         */
+        AST result = parser.parse(lexer.scan("(567 * (3 + 3)) * 123 + 1+1 + 123 * (123 * 12 + (1+2)) "));
+        System.out.println(result.generateDOTFile());
 
+        /*
         Token a = new Token("a");
         Token b = new Token("b");
 
@@ -511,5 +514,7 @@ public class Parser {
         parser.generateParserTableCsv();
         AST result = parser.parse(lexer.scan("baab"));
         System.out.println(result);
+
+         */
     }
 }
