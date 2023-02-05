@@ -10,11 +10,14 @@ import java.util.stream.Collectors;
 
 public class Parser {
     HashMap<Symbol, Set<Production>> productionMap = new HashMap<>();
-    HashSet<Symbol> terminalSymbol = new HashSet<>(List.of(Symbol.EOF_SYMBOL));
-    HashSet<Symbol> nonTerminalSymbol = new HashSet<>();
+    HashSet<Symbol> terminalSymbolSet = new HashSet<>(List.of(Symbol.EOF_SYMBOL));
+    HashSet<Symbol> nonTerminalSymbolSet = new HashSet<>();
 
     Symbol startSymbol;
     DFA dfa;
+
+    HashMap<Symbol, HashSet<Symbol>> firstSet = new HashMap<>();
+    HashMap<Symbol, HashSet<Symbol>> followSet = new HashMap<>();
 
     HashMap<DFA.State, HashMap<Symbol, ParserAction>> actionTable = new HashMap<>();
     HashMap<DFA.State, HashMap<Symbol, DFA.State>> gotoTable = new HashMap<>();
@@ -24,13 +27,13 @@ public class Parser {
             throw new ParserError("the head of production must not a terminal symbol");
         }
 
-        this.nonTerminalSymbol.add(production.head);
+        this.nonTerminalSymbolSet.add(production.head);
 
         for (Symbol symbol : production.body) {
             if (symbol.terminating) {
-                this.terminalSymbol.add(symbol);
+                this.terminalSymbolSet.add(symbol);
             } else {
-                this.nonTerminalSymbol.add(symbol);
+                this.nonTerminalSymbolSet.add(symbol);
             }
         }
 
@@ -74,10 +77,142 @@ public class Parser {
         return this.gotoTable.get(state).get(symbol);
     }
 
+    private void firstSetAdd(Symbol symbol, Symbol firstSymbol) {
+        this.firstSet.computeIfAbsent(symbol, k -> new HashSet<>()).add(firstSymbol);
+    }
+
+    private void firstSetAddAll(Symbol symbol, Collection<Symbol> firstSymbols) {
+        this.firstSet.computeIfAbsent(symbol, k -> new HashSet<>()).addAll(firstSymbols);
+    }
+
+    private HashSet<Symbol> firstSetGet(Symbol symbol) {
+        return this.firstSet.computeIfAbsent(symbol, k -> new HashSet<>());
+    }
+
+    private void followSetAdd(Symbol symbol, Symbol followSymbol) {
+        this.followSet.computeIfAbsent(symbol, k -> new HashSet<>()).add(followSymbol);
+    }
+
+    private void followSetAddAll(Symbol symbol, Collection<Symbol> followSymbol) {
+        this.followSet.computeIfAbsent(symbol, k -> new HashSet<>()).addAll(followSymbol);
+    }
+
+    private HashSet<Symbol> followSetGet(Symbol symbol) {
+        return this.followSet.computeIfAbsent(symbol, k -> new HashSet<>());
+    }
+
+    private void calcSymbolFirstSet() {
+        this.firstSetAdd(Symbol.EMPTY_SYMBOL, Symbol.EMPTY_SYMBOL);
+
+        for (Symbol terminalSymbol : terminalSymbolSet) {
+            this.firstSetAdd(terminalSymbol, terminalSymbol);
+        }
+
+        for (Symbol headSymbol : productionMap.keySet()) {
+            for (Production production : productionMap.get(headSymbol)) {
+                if (production.body.size() == 0) {
+                    // 为空
+                    this.firstSetAdd(headSymbol, Symbol.EMPTY_SYMBOL);
+                } else if (production.body.get(0).terminating) {
+                    // 第一个是终结符
+                    this.firstSetAdd(headSymbol, production.body.get(0));
+                }
+            }
+        }
+
+        boolean changed;
+        do {
+            changed = false;
+
+            for (Symbol headSymbol : productionMap.keySet()) {
+                for (Production production : productionMap.get(headSymbol)) {
+                    if (production.body.size() > 0 && !production.body.get(0).terminating) {
+                        HashSet<Symbol> oldFirstSet = new HashSet<>(this.firstSetGet(headSymbol));
+
+                        int i = 0;
+                        while (i < production.body.size()) {
+                            Symbol currSymbol = production.body.get(i);
+
+                            // 去掉 empty, 只有产生式中的符号全部为空时候, 才认为这个符号可以为空
+                            HashSet<Symbol> appendFirstSet = new HashSet<>(this.firstSetGet(currSymbol));
+                            appendFirstSet.remove(Symbol.EMPTY_SYMBOL);
+
+                            this.firstSetAddAll(headSymbol, appendFirstSet);
+                            if (!this.firstSetGet(currSymbol).contains(Symbol.EMPTY_SYMBOL)) {
+                                break;
+                            } else {
+                                i++;
+                            }
+                        }
+
+                        if (i == production.body.size()) {
+                            this.firstSetAdd(headSymbol, Symbol.EMPTY_SYMBOL);
+                        }
+
+                        if (!this.firstSetGet(headSymbol).equals(oldFirstSet)) {
+                            changed = true;
+                        }
+                    }
+                }
+            }
+        } while (changed);
+    }
+
+    private void calcSymbolFollowSet() {
+        this.followSetAdd(Symbol.EXTEND_START_SYMBOL, Symbol.EOF_SYMBOL);
+
+        boolean changed;
+        do {
+            changed = false;
+
+            for (Symbol nonTerminalSymbol : nonTerminalSymbolSet) {
+                HashSet<Symbol> oldFollowSet = new HashSet<>(this.followSetGet(nonTerminalSymbol));
+
+                for (Symbol headSymbol : productionMap.keySet()) {
+                    for (Production production : productionMap.get(headSymbol)) {
+                        for (int i = 0; i < production.body.size(); i++) {
+                            // 找到当前 nonTerminalSymbol
+                            if (production.body.get(i).equals(nonTerminalSymbol)) {
+                                // 从后一个符号开始取
+                                int j = i + 1;
+                                while (j < production.body.size()) {
+                                    // 不是最后一个, 取后一个符号的 first 集
+                                    HashSet<Symbol> appendFollowSet = new HashSet<>(this.firstSetGet(production.body.get(j)));
+                                    appendFollowSet.remove(Symbol.EMPTY_SYMBOL);
+
+                                    this.followSetAddAll(nonTerminalSymbol, appendFollowSet);
+
+                                    // 如果后一个符号可以为空, 继续求下一个符号, 否则 break
+                                    if (!this.firstSetGet(production.body.get(j)).contains(Symbol.EMPTY_SYMBOL)) {
+                                        break;
+                                    } else {
+                                        j++;
+                                    }
+                                }
+
+                                if (j == production.body.size()) {
+                                    // 遍历结束后到达最后, 并上 headSymbol 的 followSet
+                                    this.followSetAddAll(nonTerminalSymbol, this.followSetGet(headSymbol));
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (!this.followSetGet(nonTerminalSymbol).equals(oldFollowSet)) {
+                    changed = true;
+                }
+            }
+        } while (changed);
+    }
+
     public void compile() throws ParserError {
         if (this.startSymbol == null) {
             throw new ParserError("startSymbol need to be set");
         }
+
+        this.calcSymbolFirstSet();
+        this.calcSymbolFollowSet();
 
         NFA nfa = new NFA();
 
@@ -146,7 +281,7 @@ public class Parser {
                     // 增广产生式收到 EOF, 产生 ACC
                     this.addAction(currState, Symbol.EOF_SYMBOL, ParserAction.ACCEPT_PARSER_ACTION);
                 } else {
-                    for (Symbol symbol : terminalSymbol) {
+                    for (Symbol symbol : terminalSymbolSet) {
                         if (currState.reduceProductions.size() != 1 || currState.getEdges().size() != 0) {
                             // LR0 无法解决规约-移进冲突
                             throw new ParserError("not a lr0 syntax");
@@ -177,7 +312,7 @@ public class Parser {
         ArrayList<String> tableHead = new ArrayList<>(List.of("State"));
         HashMap<Symbol, Integer> symbolColumnMap = new HashMap<>();
 
-        List<Symbol> terminalSymbolList = this.terminalSymbol.stream().sorted(Comparator.comparing(Symbol::toString)).toList();
+        List<Symbol> terminalSymbolList = this.terminalSymbolSet.stream().sorted(Comparator.comparing(Symbol::toString)).toList();
         for (int i = 0; i < terminalSymbolList.size(); i++) {
             tableHead.add(terminalSymbolList.get(i).toString());
             // 表头 State, 需要 + 1
@@ -209,7 +344,7 @@ public class Parser {
         tableHead = new ArrayList<>(List.of("State"));
         symbolColumnMap = new HashMap<>();
 
-        List<Symbol> nonTerminalSymbolList = this.nonTerminalSymbol.stream().sorted(Comparator.comparing(Symbol::toString)).toList();
+        List<Symbol> nonTerminalSymbolList = this.nonTerminalSymbolSet.stream().sorted(Comparator.comparing(Symbol::toString)).toList();
         for (int i = 0; i < nonTerminalSymbolList.size(); i++) {
             tableHead.add(nonTerminalSymbolList.get(i).toString());
             // 表头 State, 需要 + 1
@@ -304,40 +439,6 @@ public class Parser {
         }
 
         return stateStack.peek().ast;
-    }
-
-    private static void testLR0() throws Exception {
-        Lexer lexer = new Lexer();
-        Parser parser = new Parser();
-
-        Token a = new Token("a");
-        Token c = new Token("c");
-        Token e = new Token("e");
-        Token b = new Token("b");
-        Token d = new Token("d");
-
-        lexer.addToken("a", a);
-        lexer.addToken("c", c);
-        lexer.addToken("e", e);
-        lexer.addToken("b", b);
-        lexer.addToken("d", d);
-
-        lexer.compile();
-
-        Symbol S = new Symbol("S");
-        Symbol A = new Symbol("A");
-        Symbol B = new Symbol("B");
-
-        parser.addProduction(new Production(S, a.asSymbol(), A, c.asSymbol(), B, e.asSymbol()));
-        parser.addProduction(new Production(A, b.asSymbol()));
-        parser.addProduction(new Production(A, A, b.asSymbol()));
-        parser.addProduction(new Production(B, d.asSymbol()));
-
-        parser.setStartSymbol(S);
-        parser.compile();
-        parser.generateParserTableCsv();
-        AST result = parser.parse(lexer.scan("abbcde"));
-        System.out.println(result);
     }
 
     public static void main(String[] args) throws Exception {
