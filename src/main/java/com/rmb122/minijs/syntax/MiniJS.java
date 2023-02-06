@@ -150,6 +150,7 @@ public class MiniJS {
             parser.addProduction(parameterListOpt, parameterList);
 
             // parameterList
+            parser.addProduction(parameterList, IDENTIFIER);
             parser.addProduction(parameterList, IDENTIFIER, CM, parameterList);
 
             // compoundStatement
@@ -299,13 +300,14 @@ public class MiniJS {
 
     public static void main(String[] args) throws Exception {
         AST ast = MiniJS.parse("""
-                function test() {
+                function test(a, b, c, d) {
                     a = 123;
+                    b[a] = a;
                 }
                 
                
                 b = test;
-                (b)()[asd].asd = {"asd": "asd", a: null};
+                (b)(a, 123, 3 + 1)[asd].asd = {"asd": "asd", a: null};
                 """);
         System.out.println(ast.generateDOTFile());
     }
