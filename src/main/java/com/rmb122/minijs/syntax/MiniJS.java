@@ -83,6 +83,7 @@ public class MiniJS {
             lexer.addToken("-", MINUS);
             lexer.addToken("/", DIV);
             lexer.addToken("\\*", MUL);
+            lexer.addToken("%", MOD);
             lexer.addToken("\\.", DOT);
             lexer.addToken("<", LT);
             lexer.addToken("<=", LTE);
@@ -135,7 +136,6 @@ public class MiniJS {
             Symbol fieldList = new Symbol("fieldList");
             Symbol literalField = new Symbol("literalField");
             Symbol elementList = new Symbol("elementList");
-            Symbol literalElement = new Symbol("literalElement");
 
             // program
             parser.addProduction(program);
@@ -164,7 +164,7 @@ public class MiniJS {
             parser.addProduction(statement, SM);
             parser.addProduction(statement, IF, condition, compoundStatement, elseStatement);
             parser.addProduction(statement, WHILE, condition, compoundStatement);
-            parser.addProduction(statement, FOR, LP, expressionOpt, SM, expressionOpt, SM, expressionOpt, SM, RP, compoundStatement);
+            parser.addProduction(statement, FOR, LP, expressionOpt, SM, expressionOpt, SM, expressionOpt, RP, compoundStatement);
             parser.addProduction(statement, BREAK, SM);
             parser.addProduction(statement, CONTINUE, SM);
             parser.addProduction(statement, RETURN, expressionOpt, SM);
@@ -191,7 +191,7 @@ public class MiniJS {
             parser.addProduction(assignmentExpression, leftHandExpression, ASN, assignmentExpression);
 
             // rightHandExpression
-            parser.addProduction(rightHandExpression, andExpression);
+            parser.addProduction(rightHandExpression, orExpression);
 
             // orExpression
             parser.addProduction(orExpression, andExpression);
@@ -303,6 +303,37 @@ public class MiniJS {
                 function test(a, b, c, d) {
                     a = 123;
                     b[a] = a;
+                    
+                    for (a = 1; i < 3; i = i + 1) {
+                        asd = 1;
+                    }
+                    
+                    for (;;) {}
+                    
+                    if (a == 1) {}
+                    
+                    b = -1;
+                    b = -asd;
+                    c = c -- c;
+                    
+                    d = a * b + c - e / f % d;
+                    if (a != 1) {} else {}
+                    
+                    while (a <= 1) {
+                        asd = 1;
+                        break;
+                        continue;
+                    }
+                    
+                    if (a && b || c) {
+                        1.1;
+                    }
+                    
+                    new a;
+                    delete a;
+                    
+                    return 123;
+                    return ;
                 }
                 
                

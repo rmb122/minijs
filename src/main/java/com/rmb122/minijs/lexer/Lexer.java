@@ -82,7 +82,7 @@ public class Lexer {
         } while (matchResult != null);
 
         if (currPos != input.length()) {
-            throw new LexerError(String.format("invalid input at pos %d", currPos));
+            throw new LexerError(String.format("invalid input at line %d, col %d", this.currLineNum, this.currColNum));
         }
 
         return tokens;
