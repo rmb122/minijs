@@ -1,8 +1,6 @@
 package com.rmb122.minijava;
 
-import com.rmb122.minijava.lexer.Lexer;
 import com.rmb122.minijava.lexer.Token;
-import com.rmb122.minijava.parser.AST;
 import com.rmb122.minijava.parser.Parser;
 import com.rmb122.minijava.parser.Production;
 import com.rmb122.minijava.parser.Symbol;

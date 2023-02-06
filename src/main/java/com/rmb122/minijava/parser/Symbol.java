@@ -2,7 +2,7 @@ package com.rmb122.minijava.parser;
 
 import com.rmb122.minijava.lexer.Token;
 
-public class Symbol {
+public class Symbol implements Symbolize {
     public static Symbol EMPTY_SYMBOL = new Symbol(false, "ε", true);
     public static Symbol EOF_SYMBOL = new Symbol(false, "#", true);
     public static Symbol EXTEND_START_SYMBOL = new Symbol(false, "__START__", true);
@@ -29,6 +29,11 @@ public class Symbol {
         this.terminating = terminating;
         this.name = name;
         this.unique = false;
+    }
+
+    @Override
+    public Symbol asSymbol() {
+        return this;
     }
 
     @Override

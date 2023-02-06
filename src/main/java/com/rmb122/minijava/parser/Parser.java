@@ -19,8 +19,8 @@ public class Parser {
     HashMap<Symbol, HashSet<Symbol>> firstSet = new HashMap<>();
     HashMap<Symbol, HashSet<Symbol>> followSet = new HashMap<>();
 
-    HashMap<DFA.State, HashMap<Symbol, ParserAction>> actionTable = new HashMap<>();
-    HashMap<DFA.State, HashMap<Symbol, DFA.State>> gotoTable = new HashMap<>();
+    HashMap<DFAState, HashMap<Symbol, ParserAction>> actionTable = new HashMap<>();
+    HashMap<DFAState, HashMap<Symbol, DFAState>> gotoTable = new HashMap<>();
 
     public void addProduction(Production production) throws ParserError {
         if (production.head.terminating) {
@@ -51,29 +51,29 @@ public class Parser {
         }
     }
 
-    private void addAction(DFA.State state, Symbol symbol, ParserAction action) throws ParserError {
+    private void addAction(DFAState state, Symbol symbol, ParserAction action) throws ParserError {
         HashMap<Symbol, ParserAction> actionLine = this.actionTable.computeIfAbsent(state, k -> new HashMap<>());
         if (actionLine.containsKey(symbol)) {
-            throw new ParserError("not a valid LALR(1) syntax, duplicate action table entry found");
+            throw new ParserError("not a valid syntax, duplicate action table entry found");
         } else {
             actionLine.put(symbol, action);
         }
     }
 
-    private ParserAction getAction(DFA.State state, Symbol symbol) {
+    private ParserAction getAction(DFAState state, Symbol symbol) {
         return this.actionTable.get(state).get(symbol);
     }
 
-    private void addGoto(DFA.State state, Symbol symbol, DFA.State targetState) throws ParserError {
-        HashMap<Symbol, DFA.State> gotoLine = this.gotoTable.computeIfAbsent(state, k -> new HashMap<>());
+    private void addGoto(DFAState state, Symbol symbol, DFAState targetState) throws ParserError {
+        HashMap<Symbol, DFAState> gotoLine = this.gotoTable.computeIfAbsent(state, k -> new HashMap<>());
         if (gotoLine.containsKey(symbol)) {
-            throw new ParserError("not a valid LALR(1) syntax, duplicate goto table entry found");
+            throw new ParserError("not a valid syntax, duplicate goto table entry found");
         } else {
             gotoLine.put(symbol, targetState);
         }
     }
 
-    private DFA.State getGoto(DFA.State state, Symbol symbol) {
+    private DFAState getGoto(DFAState state, Symbol symbol) {
         return this.gotoTable.get(state).get(symbol);
     }
 
@@ -206,98 +206,128 @@ public class Parser {
         } while (changed);
     }
 
-    private void calcProductionLookahead() {
-        // startState 上肯定有增广产生式子, 给它设置 Lookahead 到 EOF_SYMBOL
-        DFA.State startState = this.dfa.startState;
-        for (ProductionLookahead productionLookahead : startState.productionLookaheads) {
-            if (productionLookahead.production.head.equals(Symbol.EXTEND_START_SYMBOL)) {
-                productionLookahead.lookaheadSymbols.add(Symbol.EOF_SYMBOL);
+    private static class DFAConnectNotify {
+        Symbol symbol;
+        DFAState dfaState;
+
+        public DFAConnectNotify(Symbol symbol, DFAState dfaState) {
+            this.symbol = symbol;
+            this.dfaState = dfaState;
+        }
+    }
+
+    public DFA calcLR1DFA() throws ParserError {
+        DFA dfa = new DFA();
+
+        HashMap<HashSet<LR1Production>, DFAState> existedStateMap = new HashMap<>();
+        HashMap<DFAState, DFAConnectNotify> notifyMap = new HashMap<>();
+        HashSet<DFAState> workList = new HashSet<>();
+
+        dfa.startState = dfa.newState();
+        // 放入初始增广式
+        dfa.startState.addLR1Production(new LR1Production(this.productionMap.get(Symbol.EXTEND_START_SYMBOL).iterator().next(), 0, new HashSet<>(List.of(Symbol.EOF_SYMBOL))));
+        workList.add(dfa.startState);
+
+        while (!workList.isEmpty()) {
+            DFAState currState = workList.iterator().next();
+            workList.remove(currState);
+
+            // 计算 Closure
+            boolean changed;
+            do {
+                changed = false;
+
+                ArrayList<LR1Production> oldLR1Productions = new ArrayList<>(currState.lr1Productions);
+                for (LR1Production lr1Production : oldLR1Productions) {
+                    if (!lr1Production.isFinished() && !lr1Production.currSymbol().terminating) {
+                        // 当前符号不是终结符, 寻找对应的产生式
+                        Set<Production> newProductions = this.productionMap.get(lr1Production.currSymbol());
+                        if (newProductions == null || newProductions.size() == 0) {
+                            throw new ParserError(String.format("non-terminal symbol %s should have at least one production", lr1Production.currSymbol()));
+                        }
+                        HashSet<Symbol> lookaheadSymbols = new HashSet<>();
+
+                        int i = lr1Production.index + 1;
+                        while (i < lr1Production.body().size()) {
+                            Symbol symbol = lr1Production.getSymbol(i);
+                            Set<Symbol> firstSet = this.firstSetGet(symbol);
+                            lookaheadSymbols.addAll(firstSet);
+
+                            if (!firstSet.contains(Symbol.EMPTY_SYMBOL)) {
+                                break;
+                            } else {
+                                i++;
+                            }
+                        }
+
+                        lookaheadSymbols.remove(Symbol.EMPTY_SYMBOL);
+
+                        // 如果后面的全部可能为空, 那么继承当前产生式的 lookaheadSymbols
+                        if (i == lr1Production.body().size()) {
+                            lookaheadSymbols.addAll(lr1Production.lookaheadSymbols);
+                        }
+
+                        for (Production newProduction : newProductions) {
+                            currState.addLR1Production(new LR1Production(newProduction, 0, lookaheadSymbols));
+                        }
+                    }
+                }
+
+                if (!oldLR1Productions.equals(currState.lr1Productions)) {
+                    changed = true;
+                }
+            } while (changed);
+
+            DFAConnectNotify notify = notifyMap.get(currState);
+            boolean needGoto = true;
+
+            if (notify != null) {
+                HashSet<LR1Production> currLR1ProductionSet = new HashSet<>(currState.lr1Productions);
+                // 初始节点, notify 可能为 null
+                if (existedStateMap.containsKey(currLR1ProductionSet)) {
+                    // 如果已经存在, 说明当前节点重复, 将 notify 中的 state 连接到 existedStateMap 中的 state 中
+                    notify.dfaState.addNextState(notify.symbol, existedStateMap.get(currLR1ProductionSet));
+                    needGoto = false;
+                } else {
+                    // put 后, 注意不能再修改 currState.lr1Productions 了
+                    // 不存在, 那么自己就是第一个, 连上自己
+                    existedStateMap.put(currLR1ProductionSet, currState);
+                    notify.dfaState.addNextState(notify.symbol, currState);
+                }
+                notifyMap.remove(currState);
+            }
+
+            // 计算 GOTO
+            if (!needGoto) {
+                // 只有第一次需要 goto
+                continue;
+            }
+
+            // 下一个符号 -> 对应的 LR1Production
+            HashMap<Symbol, HashSet<LR1Production>> nextLR1Productions = new HashMap<>();
+            for (LR1Production lr1Production : currState.lr1Productions) {
+                // 取当前符号
+                if (!lr1Production.isFinished()) {
+                    Symbol nextSymbol = lr1Production.currSymbol();
+                    nextLR1Productions.computeIfAbsent(nextSymbol, k -> new HashSet<>()).add(lr1Production);
+                }
+            }
+
+            for (Symbol nextSymbol : nextLR1Productions.keySet()) {
+                DFAState nextState = dfa.newState();
+
+                for (LR1Production nextLR1Production : nextLR1Productions.get(nextSymbol)) {
+                    // 继承 lookaheadSymbols, index + 1
+                    nextState.addLR1Production(new LR1Production(nextLR1Production.production, nextLR1Production.index + 1, nextLR1Production.lookaheadSymbols));
+                }
+
+                // 通知下一个 state 构建好时连接当前状态
+                notifyMap.put(nextState, new DFAConnectNotify(nextSymbol, currState));
+                workList.add(nextState);
             }
         }
 
-        boolean changed;
-        do {
-            changed = false;
-
-            HashSet<DFA.State> workList = new HashSet<>();
-            HashSet<DFA.State> visitedStates = new HashSet<>();
-            workList.add(startState);
-
-            while (!workList.isEmpty()) {
-                DFA.State currState = workList.iterator().next();
-                workList.remove(currState);
-                visitedStates.add(currState);
-
-                HashMap<Symbol, HashSet<ProductionLookahead>> currStateLookaheadsMap = new HashMap<>();
-                for (ProductionLookahead productionLookahead : currState.productionLookaheads) {
-                    currStateLookaheadsMap.computeIfAbsent(productionLookahead.production.head, k -> new HashSet<>()).add(productionLookahead);
-                }
-
-                for (ProductionLookahead productionLookahead : currState.productionLookaheads) {
-                    // closure
-                    if (productionLookahead.index < productionLookahead.production.body.size()) {
-                        Symbol currSymbol = productionLookahead.production.body.get(productionLookahead.index);
-                        // 当前位置在一个非终结符前面, 取这个非终结符为 currSymbol
-                        if (!currSymbol.terminating) {
-                            // 找到这个非终结符对应的产生式, 且产生式在开始位置
-                            Set<ProductionLookahead> waitingProductionLookaheads = currStateLookaheadsMap.computeIfAbsent(currSymbol, k -> new HashSet<>());
-                            waitingProductionLookaheads = ProductionLookahead.findStartProduction(waitingProductionLookaheads);
-
-                            // 需要增加的 lookahead = FIRST(后面的符号 + 当前产生式的 lookahead)
-                            Set<Symbol> newLookaheads = new HashSet<>();
-                            int i = productionLookahead.index + 1;
-
-                            while (i < productionLookahead.production.body.size()) {
-                                Set<Symbol> currFirstSet = this.firstSetGet(productionLookahead.production.body.get(i));
-                                newLookaheads.addAll(currFirstSet);
-
-                                // 存在 EMPTY_SYMBOL, 继续找下一个, 不存在就直接 break
-                                if (currFirstSet.contains(Symbol.EMPTY_SYMBOL)) {
-                                    i++;
-                                } else {
-                                    break;
-                                }
-                            }
-
-                            // 去掉空符号
-                            newLookaheads.remove(Symbol.EMPTY_SYMBOL);
-                            // 到了最后一个, 再加上当前产生式的 lookahead
-                            if (i == productionLookahead.production.body.size()) {
-                                newLookaheads.addAll(productionLookahead.lookaheadSymbols);
-                            }
-
-                            for (ProductionLookahead waitingProductionLookahead : waitingProductionLookaheads) {
-                                for (Symbol newLookahead : newLookaheads) {
-                                    if (!waitingProductionLookahead.lookaheadSymbols.contains(newLookahead)) {
-                                        waitingProductionLookahead.lookaheadSymbols.add(newLookahead);
-                                        changed = true;
-                                    }
-                                }
-                            }
-                        }
-
-                        // goto
-                        // 当前产生式的移位后产生式子继承此产生式的 lookahead
-                        DFA.State nextState = currState.getEdge(currSymbol);
-                        Set<ProductionLookahead> waitingProductionLookaheads = ProductionLookahead.findProduction(nextState.productionLookaheads, productionLookahead.production, productionLookahead.index + 1);
-                        for (ProductionLookahead waitingProductionLookahead : waitingProductionLookaheads) {
-                            for (Symbol newLookahead : productionLookahead.lookaheadSymbols) {
-                                if (!waitingProductionLookahead.lookaheadSymbols.contains(newLookahead)) {
-                                    waitingProductionLookahead.lookaheadSymbols.add(newLookahead);
-                                    changed = true;
-                                }
-                            }
-                        }
-                    }
-                }
-
-                for (DFA.State nextState : currState.getEdges().values()) {
-                    if (!visitedStates.contains(nextState)) {
-                        workList.add(nextState);
-                    }
-                }
-            }
-        } while (changed);
+        return dfa;
     }
 
     public void compile() throws ParserError {
@@ -306,99 +336,45 @@ public class Parser {
         }
 
         this.calcSymbolFirstSet();
-        this.calcSymbolFollowSet();
+        // this.calcSymbolFollowSet();
+        this.dfa = calcLR1DFA();
+        this.buildParserTable();
+    }
 
-        NFA nfa = new NFA();
-
-        HashMap<Symbol, NFA.State> symbolStartState = new HashMap<>();
-        for (Symbol headSymbol : productionMap.keySet()) {
-            NFA.State state = nfa.newState();
-            symbolStartState.put(headSymbol, state);
-
-            if (headSymbol.equals(Symbol.EXTEND_START_SYMBOL)) {
-                nfa.startState = state;
-                state.start = true;
-            }
-        }
-
-        for (Symbol headSymbol : productionMap.keySet()) {
-            for (Production production : productionMap.get(headSymbol)) {
-                NFA.State currState = symbolStartState.get(headSymbol);
-                currState.productionLookaheads.add(new ProductionLookahead(production, 0));
-
-                if (production.body.size() != 0) {
-                    for (int i = 0; i < production.body.size(); i++) {
-                        Symbol currSymbol = production.body.get(i);
-                        NFA.State newState = nfa.newState();
-                        newState.productionLookaheads.add(new ProductionLookahead(production, i + 1));
-                        currState.addEdge(currSymbol, newState);
-
-                        if (!currSymbol.terminating) {
-                            if (!symbolStartState.containsKey(currSymbol)) {
-                                throw new ParserError(String.format("symbol %s should have at least one production", currSymbol));
-                            }
-
-                            currState.addEdge(Symbol.EMPTY_SYMBOL, symbolStartState.get(currSymbol));
-                        }
-
-                        if (i == production.body.size() - 1) {
-                            newState.end = true;
-                        }
-
-                        currState = newState;
-                    }
-                } else {
-                    // 空产生式, 代表这个符号可以为空
-                    currState.addEdge(Symbol.EMPTY_SYMBOL, currState);
-                    currState.end = true;
-                    currState.productionLookaheads.add(new ProductionLookahead(production, 0));
-                }
-            }
-        }
-
-        this.dfa = DFA.fromNFA(nfa);
-        this.calcProductionLookahead();
-
-        System.out.println(nfa.generateDOTFile());
-        System.out.println(dfa.generateDOTFile());
-
-        HashSet<DFA.State> workList = new HashSet<>();
-        HashSet<DFA.State> visitedState = new HashSet<>();
+    private void buildParserTable() throws ParserError {
+        HashSet<DFAState> workList = new HashSet<>();
+        HashSet<DFAState> visitedState = new HashSet<>();
         workList.add(this.dfa.startState);
 
-
         while (!workList.isEmpty()) {
-            DFA.State currState = workList.iterator().next();
+            DFAState currState = workList.iterator().next();
             workList.remove(currState);
             visitedState.add(currState);
 
-            // LALR(1) 实现
-            if (currState.end) {
-                Set<ProductionLookahead> finishedProduction = ProductionLookahead.findFinishedProduction(currState.productionLookaheads);
+            List<LR1Production> finishedProduction = LR1Production.findFinishedProduction(currState.lr1Productions);
 
-                for (ProductionLookahead productionLookahead : finishedProduction) {
-                    if (productionLookahead.production.head == Symbol.EXTEND_START_SYMBOL) {
-                        // 增广产生式收到 EOF, 产生 ACC
-                        this.addAction(currState, Symbol.EOF_SYMBOL, ParserAction.PARSER_ACTION_ACCEPT);
-                    } else {
-                        // 其余正常产生式
-                        // LALR(1), 只对产生式 lookahead 集中的终结符产生规约
-                        for (Symbol symbol : productionLookahead.lookaheadSymbols) {
-                            this.addAction(currState, symbol, new ParserAction(productionLookahead.production));
-                        }
+            for (LR1Production lr1Production : finishedProduction) {
+                if (lr1Production.production.head == Symbol.EXTEND_START_SYMBOL) {
+                    // 增广产生式收到 EOF, 产生 ACC
+                    this.addAction(currState, Symbol.EOF_SYMBOL, ParserAction.PARSER_ACTION_ACCEPT);
+                } else {
+                    // 其余正常产生式
+                    // 只对产生式 lookahead 集中的终结符产生规约
+                    for (Symbol symbol : lr1Production.lookaheadSymbols) {
+                        this.addAction(currState, symbol, new ParserAction(lr1Production.production));
                     }
                 }
             }
 
             for (Symbol symbol : currState.getEdges().keySet()) {
                 if (symbol.terminating) {
-                    this.addAction(currState, symbol, new ParserAction(currState.getEdge(symbol)));
+                    this.addAction(currState, symbol, new ParserAction(currState.getNextState(symbol)));
                 } else {
-                    this.addGoto(currState, symbol, currState.getEdge(symbol));
+                    this.addGoto(currState, symbol, currState.getNextState(symbol));
                 }
             }
 
-            for (DFA.State nextState : currState.getEdges().values()) {
+            for (DFAState nextState : currState.getEdges().values()) {
                 if (!visitedState.contains(nextState)) {
                     workList.add(nextState);
                 }
@@ -407,6 +383,9 @@ public class Parser {
     }
 
     public void generateParserTableCsv() {
+        // dfa
+        System.out.println(dfa.generateDOTFile());
+
         // action 表
         ArrayList<String> tableHead = new ArrayList<>(List.of("State"));
         HashMap<Symbol, Integer> symbolColumnMap = new HashMap<>();
@@ -420,7 +399,7 @@ public class Parser {
 
         ArrayList<ArrayList<String>> tableContent = new ArrayList<>();
 
-        for (DFA.State state : this.actionTable.keySet().stream().sorted(Comparator.comparingInt(s -> s.id)).toList()) {
+        for (DFAState state : this.actionTable.keySet().stream().sorted(Comparator.comparingInt(s -> s.id)).toList()) {
             ArrayList<String> currTableContentLine = new ArrayList<>(Collections.nCopies(tableHead.size(), ""));
             currTableContentLine.set(0, String.valueOf(state.id));
 
@@ -452,11 +431,11 @@ public class Parser {
 
         tableContent = new ArrayList<>();
 
-        for (DFA.State state : this.gotoTable.keySet().stream().sorted(Comparator.comparingInt(s -> s.id)).toList()) {
+        for (DFAState state : this.gotoTable.keySet().stream().sorted(Comparator.comparingInt(s -> s.id)).toList()) {
             ArrayList<String> currTableContentLine = new ArrayList<>(Collections.nCopies(tableHead.size(), ""));
             currTableContentLine.set(0, String.valueOf(state.id));
 
-            HashMap<Symbol, DFA.State> gotoLine = this.gotoTable.get(state);
+            HashMap<Symbol, DFAState> gotoLine = this.gotoTable.get(state);
             for (Symbol symbol : gotoLine.keySet()) {
                 currTableContentLine.set(symbolColumnMap.get(symbol), String.valueOf(gotoLine.get(symbol).id));
             }
@@ -525,14 +504,7 @@ public class Parser {
                         children.set(i, popState.ast);
                     }
 
-                    stateStack.push(
-                            new ParserState(
-                                    this.getGoto(stateStack.peek().dfaState, action.reduceProduction.head),
-                                    action.reduceProduction.head,
-                                    null,
-                                    new AST(action.reduceProduction.head, action.reduceProduction, null, children)
-                            )
-                    );
+                    stateStack.push(new ParserState(this.getGoto(stateStack.peek().dfaState, action.reduceProduction.head), action.reduceProduction.head, null, new AST(action.reduceProduction.head, action.reduceProduction, null, children)));
                 }
             }
         }
@@ -546,23 +518,34 @@ public class Parser {
 
         Token a = new Token("a");
         Token b = new Token("b");
+        Token c = new Token("c");
+        Token d = new Token("d");
+        Token e = new Token("e");
 
         lexer.addToken("a", a);
         lexer.addToken("b", b);
+        lexer.addToken("c", c);
+        lexer.addToken("d", d);
+        lexer.addToken("e", e);
 
         lexer.compile();
 
         Symbol S = new Symbol("S");
-        Symbol B = new Symbol("B");
+        Symbol E = new Symbol("E");
+        Symbol F = new Symbol("F");
 
-        parser.addProduction(new Production(S, B, B));
-        parser.addProduction(new Production(B, a.asSymbol(), B));
-        parser.addProduction(new Production(B, b.asSymbol()));
+        parser.addProduction(new Production(S, a, E, c));
+        parser.addProduction(new Production(S, a, F, d));
+        parser.addProduction(new Production(S, b, F, c));
+        parser.addProduction(new Production(S, b, E, d));
+        parser.addProduction(new Production(E, e));
+        parser.addProduction(new Production(F, e));
 
         parser.setStartSymbol(S);
         parser.compile();
         parser.generateParserTableCsv();
-        AST result = parser.parse(lexer.scan("abab"));
+
+        AST result = parser.parse(lexer.scan("aed"));
         System.out.println(result.generateDOTFile());
     }
 }

@@ -1,8 +1,9 @@
 package com.rmb122.minijava.lexer;
 
 import com.rmb122.minijava.parser.Symbol;
+import com.rmb122.minijava.parser.Symbolize;
 
-public class Token {
+public class Token implements Symbolize {
     String name;
     int priority;
     Symbol symbol;

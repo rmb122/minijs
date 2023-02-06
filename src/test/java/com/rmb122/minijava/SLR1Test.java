@@ -52,6 +52,8 @@ public class SLR1Test extends TestCase {
 
         parser.setStartSymbol(expr);
         parser.compile();
+        parser.generateParserTableCsv();
+
         AST result = parser.parse(lexer.scan("(567 * (3 + 3)) * 123 + 1+1 + 123 * (123 * 12 + (1+2)) "));
         System.out.println(result.generateDOTFile());
     }

@@ -11,14 +11,14 @@ public class ParserAction {
 
     ParserActionType type;
     Production reduceProduction;
-    DFA.State gotoState;
+    DFAState gotoState;
 
     public ParserAction(Production reduceProduction) {
         this.type = ParserActionType.REDUCE;
         this.reduceProduction = reduceProduction;
     }
 
-    public ParserAction(DFA.State gotoState) {
+    public ParserAction(DFAState gotoState) {
         this.type = ParserActionType.SHIFT;
         this.gotoState = gotoState;
     }
