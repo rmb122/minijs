@@ -22,7 +22,7 @@ public class LR1Production {
     }
 
     public boolean isFinished() {
-        return this.production.body.size() != 0 && this.index == this.production.body.size();
+        return this.index == this.production.body.size();
     }
 
     public Symbol currSymbol() {

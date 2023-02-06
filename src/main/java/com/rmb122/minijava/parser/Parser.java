@@ -40,6 +40,10 @@ public class Parser {
         productionMap.computeIfAbsent(production.head, k -> new HashSet<>()).add(production);
     }
 
+    public void addProduction(Symbolize head, Symbolize... body) throws ParserError {
+        this.addProduction(new Production(head, body));
+    }
+
     public void setStartSymbol(Symbol symbol) throws ParserError {
         if (startSymbol == null) {
             startSymbol = symbol;
@@ -504,7 +508,14 @@ public class Parser {
                         children.set(i, popState.ast);
                     }
 
-                    stateStack.push(new ParserState(this.getGoto(stateStack.peek().dfaState, action.reduceProduction.head), action.reduceProduction.head, null, new AST(action.reduceProduction.head, action.reduceProduction, null, children)));
+                    stateStack.push(
+                            new ParserState(
+                                    this.getGoto(stateStack.peek().dfaState, action.reduceProduction.head),
+                                    action.reduceProduction.head,
+                                    null,
+                                    new AST(action.reduceProduction.head, action.reduceProduction, null, children)
+                            )
+                    );
                 }
             }
         }

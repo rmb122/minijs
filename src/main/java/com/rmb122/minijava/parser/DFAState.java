@@ -26,7 +26,7 @@ public class DFAState {
         }
     }
 
-    public void addNextState(Symbol symbol, DFAState state) throws RuntimeException {
+    public void addNextState(Symbol symbol, DFAState state) {
         if (edges.get(symbol) != null) {
             throw new RuntimeException("when transforming NFA to DFA, duplicate edge found");
         }
