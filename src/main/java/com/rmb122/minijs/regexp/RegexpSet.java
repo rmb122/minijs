@@ -41,7 +41,8 @@ public class RegexpSet<C> {
                 nextState = currState.getEdge(Rune.ANY_CHAR);
             }
 
-            if (nextState == null) {
+            // 下一个状态为 null, 或者下一个状态不是 end 且出边为空 (NFA 转成 DFA 后的 STOP_STATE)
+            if (nextState == null || (!nextState.end && nextState.getEdgeKeys().size() == 0)) {
                 break;
             } else {
                 currState = nextState;

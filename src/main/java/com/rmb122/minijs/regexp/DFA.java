@@ -4,6 +4,7 @@ import org.apache.commons.text.StringEscapeUtils;
 
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Set;
 
 public class DFA<C> {
     private int uniqueID = 0;
@@ -40,6 +41,10 @@ public class DFA<C> {
 
         public State<C> getEdge(Rune r) {
             return edges.get(r);
+        }
+
+        public Set<Rune> getEdgeKeys() {
+            return this.edges.keySet();
         }
 
         @Override

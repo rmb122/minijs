@@ -7,9 +7,10 @@ import com.rmb122.minijs.parser.AST;
 import com.rmb122.minijs.parser.Parser;
 import com.rmb122.minijs.parser.ParserError;
 import com.rmb122.minijs.parser.Symbol;
+import com.rmb122.minijs.regexp.RegexpOption;
 
 public class MiniJS {
-    private static final Lexer lexer = new Lexer();
+    private static final Lexer lexer = new Lexer(RegexpOption.DEBUG);
     private static final Parser parser = new Parser();
 
     static {
@@ -18,6 +19,8 @@ public class MiniJS {
         // https://www-archive.mozilla.org/js/language/grammar14.html
         try {
             Token BLANK = new Token("BLANK");
+            Token COMMENT1 = new Token("COMMENT1");
+            Token COMMENT2 = new Token("COMMENT2");
             Token IDENTIFIER = new Token("IDENTIFIER", 1);
             Token FUNCTION = new Token("FUNCTION");
             Token LP = new Token("LP");
@@ -63,6 +66,8 @@ public class MiniJS {
             Token VAR = new Token("VAR");
 
             lexer.addToken("[\n\r\t ]+", BLANK, true);
+            lexer.addToken("//.*", COMMENT1, true);
+            lexer.addToken("/\\*([^*]|[\\r\\n]|(\\*+([^*/]|[\\r\\n])))*\\*+/", COMMENT2, true);
             lexer.addToken("[A-Za-z][A-Za-z0-9]*", IDENTIFIER);
             lexer.addToken("function", FUNCTION);
             lexer.addToken("\\(", LP);
@@ -322,6 +327,12 @@ public class MiniJS {
 
     public static void main(String[] args) throws Exception {
         AST ast = MiniJS.parse("""
+                /*a
+                comment  **
+                asd */
+                
+                // asdasd asd asd 
+                
                 function aa () {
                     var a = 123;
                     var b = 44 * (a.b()), c = 123123 - 132;
@@ -333,7 +344,7 @@ public class MiniJS {
                     null;
                     b = [123, 123, asd()];
                 }
-                
+                                
                 function test(a, b, c, d) {
                     a = 123;
                     b[a] = a;
@@ -369,8 +380,8 @@ public class MiniJS {
                     return 123;
                     return ;
                 }
-                
-               
+                                
+                               
                 b = test;
                 (b)(a, 123, 3 + 1)[asd].asd = {"asd": "asd", a: null};
                 """);
