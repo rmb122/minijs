@@ -60,6 +60,7 @@ public class MiniJS {
             Token NEW = new Token("NEW");
             Token EQ = new Token("EQ");
             Token NE = new Token("NE");
+            Token VAR = new Token("VAR");
 
             lexer.addToken("[\n\r\t ]+", BLANK, true);
             lexer.addToken("[A-Za-z][A-Za-z0-9]*", IDENTIFIER);
@@ -104,6 +105,7 @@ public class MiniJS {
             lexer.addToken("new", NEW);
             lexer.addToken("==", EQ);
             lexer.addToken("!=", NE);
+            lexer.addToken("var", VAR);
 
             Symbol program = new Symbol("program");
             Symbol element = new Symbol("element");
@@ -136,6 +138,10 @@ public class MiniJS {
             Symbol fieldList = new Symbol("fieldList");
             Symbol literalField = new Symbol("literalField");
             Symbol elementList = new Symbol("elementList");
+            Symbol variableDefinition = new Symbol("variableDefinition");
+            Symbol variableDeclarationList = new Symbol("variableDeclarationList");
+            Symbol variableDeclaration = new Symbol("variableDeclaration");
+            Symbol variableInitializer = new Symbol("variableInitializer");
 
             // program
             parser.addProduction(program);
@@ -165,10 +171,12 @@ public class MiniJS {
             parser.addProduction(statement, IF, condition, compoundStatement, elseStatement);
             parser.addProduction(statement, WHILE, condition, compoundStatement);
             parser.addProduction(statement, FOR, LP, expressionOpt, SM, expressionOpt, SM, expressionOpt, RP, compoundStatement);
+            parser.addProduction(statement, FOR, LP, variableDefinition, SM, expressionOpt, SM, expressionOpt, RP, compoundStatement);
             parser.addProduction(statement, BREAK, SM);
             parser.addProduction(statement, CONTINUE, SM);
             parser.addProduction(statement, RETURN, expressionOpt, SM);
             parser.addProduction(statement, expression, SM);
+            parser.addProduction(statement, variableDefinition, SM);
 
             // elseStatement
             parser.addProduction(elseStatement);
@@ -283,6 +291,20 @@ public class MiniJS {
             parser.addProduction(elementList, assignmentExpression);
             parser.addProduction(elementList, elementList, CM, assignmentExpression);
 
+            // variableDefinition
+            parser.addProduction(variableDefinition, VAR, variableDeclarationList);
+
+            // variableDeclarationList
+            parser.addProduction(variableDeclarationList, variableDeclaration);
+            parser.addProduction(variableDeclarationList, variableDeclarationList, CM, variableDeclaration);
+
+            // variableDeclaration
+            parser.addProduction(variableDeclaration, IDENTIFIER, variableInitializer);
+
+            // variableInitializer
+            parser.addProduction(variableInitializer);
+            parser.addProduction(variableInitializer, ASN, assignmentExpression);
+
             lexer.compile();
 
             parser.setStartSymbol(program);
@@ -300,6 +322,18 @@ public class MiniJS {
 
     public static void main(String[] args) throws Exception {
         AST ast = MiniJS.parse("""
+                function aa () {
+                    var a = 123;
+                    var b = 44 * (a.b()), c = 123123 - 132;
+                    for (var a = 1; a < 1; a = a + 1) {}
+                    
+                    this.a;
+                    true;
+                    false;
+                    null;
+                    b = [123, 123, asd()];
+                }
+                
                 function test(a, b, c, d) {
                     a = 123;
                     b[a] = a;
