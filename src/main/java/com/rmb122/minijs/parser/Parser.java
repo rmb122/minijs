@@ -6,6 +6,7 @@ import com.rmb122.minijs.lexer.TokenValue;
 import org.apache.commons.text.StringEscapeUtils;
 
 import java.util.*;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 public class Parser {
@@ -42,6 +43,10 @@ public class Parser {
 
     public void addProduction(Symbolize head, Symbolize... body) throws ParserError {
         this.addProduction(new Production(head, body));
+    }
+
+    public void addProduction(Consumer<AST> semanticAction, Symbolize head, Symbolize... body) throws ParserError {
+        this.addProduction(new Production(semanticAction, head, body));
     }
 
     public void setStartSymbol(Symbol symbol) throws ParserError {
@@ -220,7 +225,7 @@ public class Parser {
         }
     }
 
-    public DFA calcLR1DFA() throws ParserError {
+    private DFA calcLR1DFA() throws ParserError {
         DFA dfa = new DFA();
 
         HashMap<HashSet<LR1Production>, DFAState> existedStateMap = new HashMap<>();
@@ -508,12 +513,18 @@ public class Parser {
                         children.set(i, popState.ast);
                     }
 
+                    AST ast = new AST(action.reduceProduction.head, action.reduceProduction, null, children);
+                    if (action.reduceProduction.semanticAction != null) {
+                        // 调用语义动作
+                        action.reduceProduction.semanticAction.accept(ast);
+                    }
+
                     stateStack.push(
                             new ParserState(
                                     this.getGoto(stateStack.peek().dfaState, action.reduceProduction.head),
                                     action.reduceProduction.head,
                                     null,
-                                    new AST(action.reduceProduction.head, action.reduceProduction, null, children)
+                                    ast
                             )
                     );
                 }

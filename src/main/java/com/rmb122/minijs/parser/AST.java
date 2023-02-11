@@ -8,10 +8,11 @@ import java.util.HashSet;
 import java.util.List;
 
 public class AST {
-    Symbol symbol;
-    Production production;
-    TokenValue tokenValue;
-    List<AST> children;
+    public final Symbol symbol;
+    public final Production production;
+    public final TokenValue tokenValue;
+    public final List<AST> children;
+    public Object custom;
 
     public AST(Symbol symbol, Production production, TokenValue tokenValue, AST... children) {
         this.symbol = symbol;
@@ -25,6 +26,18 @@ public class AST {
         this.production = production;
         this.tokenValue = tokenValue;
         this.children = children;
+    }
+
+    public void setCustom(Object custom) {
+        this.custom = custom;
+    }
+
+    public Object getChildrenCustom(int idx) {
+        return this.children.get(idx).custom;
+    }
+
+    public String getChildrenTokenValue(int idx) {
+        return this.children.get(idx).tokenValue.getValue();
     }
 
     public String generateDOTFile() {
