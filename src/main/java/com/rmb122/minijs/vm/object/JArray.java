@@ -3,27 +3,60 @@ package com.rmb122.minijs.vm.object;
 import com.rmb122.minijs.vm.JException;
 
 import java.util.ArrayList;
+import java.util.List;
 
 public class JArray extends JObject {
     public static final JString LENGTH_KEY = new JString("length");
-    private final ArrayList<JBaseObject> array = new ArrayList<>();
+    private List<JBaseObject> array = new ArrayList<>();
+
+    private void adjustLength(int length) throws JException {
+        if (length < 0) {
+            throw new JException("Invalid array length");
+        }
+
+        int selfLength = this.length();
+        if (length > selfLength) {
+            for (int i = selfLength; i < length; i++) {
+                this.push(JUndefine.UNDEFINE);
+            }
+        } else if (length < selfLength) {
+            this.array = this.array.subList(0, length);
+        }
+    }
 
     @Override
     public JBaseObject set(JString name, JBaseObject value) throws JException {
         if (name.equals(LENGTH_KEY)) {
             try {
-                Long length = Long.parseLong(value.toString());
+                int length = Integer.parseInt(value.toString());
+                this.adjustLength(length);
+                return value;
             } catch (NumberFormatException e) {
                 throw new JException("Invalid array length");
             }
         }
 
-        return super.set(name, value);
+        try {
+            int index = Integer.parseInt(name.toString());
+            this.adjustLength(index + 1);
+            return this.array.set(index, value);
+        } catch (NumberFormatException e) {
+            return super.set(name, value);
+        }
     }
 
     @Override
     public JBaseObject get(JString name) {
-        return super.get(name);
+        try {
+            int index = Integer.parseInt(name.toString());
+            if (index < this.length()) {
+                return this.array.get(index);
+            } else {
+                return JUndefine.UNDEFINE;
+            }
+        } catch (NumberFormatException e) {
+            return super.get(name);
+        }
     }
 
     public int length() {

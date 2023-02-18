@@ -7,4 +7,8 @@ import java.util.HashMap;
 public class Frame {
     public JBaseObject thisObject;
     public HashMap<String, JBaseObject> variables = new HashMap<>();
+
+    public Frame(JBaseObject thisObject) {
+        this.thisObject = thisObject;
+    }
 }

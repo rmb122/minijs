@@ -20,6 +20,11 @@ public class JObject implements JBaseObject {
     }
 
     @Override
+    public JBaseObject remove(JString name) {
+        return values.remove(name);
+    }
+
+    @Override
     public JNumber toJNumber() {
         return JNumber.NAN;
     }

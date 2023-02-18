@@ -7,8 +7,12 @@ import com.rmb122.minijs.parser.AST;
 import com.rmb122.minijs.parser.Parser;
 import com.rmb122.minijs.parser.ParserError;
 import com.rmb122.minijs.parser.Symbol;
+import com.rmb122.minijs.vm.Program;
 import com.rmb122.minijs.vm.eval.*;
 import com.rmb122.minijs.vm.object.*;
+
+import java.util.ArrayList;
+import java.util.List;
 
 public class MiniJS {
     private static final Lexer lexer = new Lexer();
@@ -70,8 +74,8 @@ public class MiniJS {
     public static final Symbol statement = new Symbol("statement");
     public static final Symbol elseStatement = new Symbol("elseStatement");
     public static final Symbol condition = new Symbol("condition");
-    public static final Symbol expressionOpt = new Symbol("expressionOpt");
-    public static final Symbol expression = new Symbol("expression");
+    public static final Symbol expressionListOpt = new Symbol("expressionListOpt");
+    public static final Symbol expressionList = new Symbol("expressionList");
     public static final Symbol assignmentExpression = new Symbol("assignmentExpression");
     public static final Symbol rightHandExpression = new Symbol("rightHandExpression");
     public static final Symbol orExpression = new Symbol("orExpression");
@@ -105,7 +109,7 @@ public class MiniJS {
             lexer.addToken("[\n\r\t ]+", BLANK, true);
             lexer.addToken("//.*", COMMENT, true);
             lexer.addToken("/\\*([^*]|[\\r\\n]|(\\*+([^*/]|[\\r\\n])))*\\*+/", MULTI_COMMENT, true);
-            lexer.addToken("[A-Za-z][A-Za-z0-9]*", IDENTIFIER);
+            lexer.addToken("[A-Za-z][A-Za-z0-9_]*", IDENTIFIER);
             lexer.addToken("function", FUNCTION);
             lexer.addToken("\\(", LP);
             lexer.addToken("\\)", RP);
@@ -140,7 +144,7 @@ public class MiniJS {
             lexer.addToken("null", NULL);
             lexer.addToken("[0-9]+", INTEGER);
             lexer.addToken("[0-9]+\\.[0-9]+", FLOAT);
-            lexer.addToken("\"(\\\\.|[^\\\\\"\n])*\"", STRING);
+            lexer.addToken("\"(\\\\.|[^\\\\\"\n])*\"|'(\\\\.|[^\\\\'\n])*'", STRING);
             lexer.addToken("&&", AND);
             lexer.addToken("\\|\\|", OR);
             lexer.addToken("delete", DELETE);
@@ -150,129 +154,178 @@ public class MiniJS {
             lexer.addToken("var", VAR);
 
             // program
-            parser.addProduction(program);
-            parser.addProduction(program, program, function);
-            parser.addProduction(program, program, statement);
+            parser.addProduction(ast -> ast.setCustom(new Program()), program);
+            parser.addProduction(ast -> {
+                Program program = (Program) ast.getChildrenCustom(0);
+                program.addFunction((JFunction) ast.getChildrenCustom(1));
+                ast.setCustom(program);
+            }, program, program, function);
+            parser.addProduction(ast -> {
+                Program program = (Program) ast.getChildrenCustom(0);
+                program.addStmt((Stmt) ast.getChildrenCustom(1));
+                ast.setCustom(program);
+            }, program, program, statement);
 
             // element
-            parser.addProduction(function, FUNCTION, IDENTIFIER, LP, parameterListOpt, RP, compoundStatement);
+            parser.addProduction(ast -> ast.setCustom(new JFunction(ast.getChildrenTokenValue(1), (List<String>) ast.getChildrenCustom(3), (StmtList) ast.getChildrenCustom(5))), function, FUNCTION, IDENTIFIER, LP, parameterListOpt, RP, compoundStatement);
 
             // parameterListOpt
-            parser.addProduction(parameterListOpt);
-            parser.addProduction(parameterListOpt, parameterList);
+            parser.addProduction(ast -> ast.setCustom(new ArrayList<String>()), parameterListOpt);
+            parser.addProduction(ast -> ast.setCustom(ast.getChildrenCustom(0)), parameterListOpt, parameterList);
 
             // parameterList
-            parser.addProduction(parameterList, IDENTIFIER);
-            parser.addProduction(parameterList, parameterList, CM, IDENTIFIER);
+            parser.addProduction(ast -> {
+                ArrayList<String> params = new ArrayList<>();
+                params.add(ast.getChildrenTokenValue(0));
+                ast.setCustom(params);
+            }, parameterList, IDENTIFIER);
+            parser.addProduction(ast -> {
+                ArrayList<String> params = (ArrayList<String>) ast.getChildrenCustom(0);
+                params.add(ast.getChildrenTokenValue(2));
+                ast.setCustom(params);
+            }, parameterList, parameterList, CM, IDENTIFIER);
 
             // compoundStatement
-            parser.addProduction(compoundStatement, LC, statements, RC);
+            parser.addProduction(ast -> ast.setCustom(ast.getChildrenCustom(1)), compoundStatement, LC, statements, RC);
 
             // statements
-            parser.addProduction(statements);
-            parser.addProduction(statements, statements, statement);
+            parser.addProduction(ast -> ast.setCustom(new StmtList()), statements);
+            parser.addProduction(ast -> {
+                StmtList stmtList = (StmtList) ast.getChildrenCustom(0);
+                stmtList.addStmt((Stmt) ast.getChildrenCustom(1));
+                ast.setCustom(stmtList);
+            }, statements, statements, statement);
 
             // statement
-            parser.addProduction(statement, SM);
-            parser.addProduction(statement, IF, condition, compoundStatement, elseStatement);
-            parser.addProduction(statement, WHILE, condition, compoundStatement);
-            parser.addProduction(statement, FOR, LP, expressionOpt, SM, expressionOpt, SM, expressionOpt, RP, compoundStatement);
-            parser.addProduction(statement, FOR, LP, variableDefinition, SM, expressionOpt, SM, expressionOpt, RP, compoundStatement);
-            parser.addProduction(statement, BREAK, SM);
-            parser.addProduction(statement, CONTINUE, SM);
-            parser.addProduction(statement, RETURN, expressionOpt, SM);
-            parser.addProduction(statement, expression, SM);
-            parser.addProduction(statement, variableDefinition, SM);
+            // 不允许空语句
+            // parser.addProduction(statement, SM);
+            parser.addProduction(ast -> ast.setCustom(new IfStmt((ExprList) ast.getChildrenCustom(1), (StmtList) ast.getChildrenCustom(2), (StmtList) ast.getChildrenCustom(3))), statement, IF, condition, compoundStatement, elseStatement);
+            parser.addProduction(ast -> ast.setCustom(new WhileStmt((ExprList) ast.getChildrenCustom(1), (StmtList) ast.getChildrenCustom(2))), statement, WHILE, condition, compoundStatement);
+            parser.addProduction(ast -> ast.setCustom(new ForStmt((ExprList) ast.getChildrenCustom(2), (ExprList) ast.getChildrenCustom(4), (ExprList) ast.getChildrenCustom(6), (StmtList) ast.getChildrenCustom(8))), statement, FOR, LP, expressionListOpt, SM, expressionListOpt, SM, expressionListOpt, RP, compoundStatement);
+            parser.addProduction(ast -> ast.setCustom(new ForStmt((VariableDefinitionStmt) ast.getChildrenCustom(2), (ExprList) ast.getChildrenCustom(4), (ExprList) ast.getChildrenCustom(6), (StmtList) ast.getChildrenCustom(8))), statement, FOR, LP, variableDefinition, SM, expressionListOpt, SM, expressionListOpt, RP, compoundStatement);
+            parser.addProduction(ast -> ast.setCustom(new BreakStmt()), statement, BREAK, SM);
+            parser.addProduction(ast -> ast.setCustom(new ContinueStmt()), statement, CONTINUE, SM);
+            parser.addProduction(ast -> ast.setCustom(new ReturnStmt((Expr) ast.getChildrenCustom(1))), statement, RETURN, expressionListOpt, SM);
+            parser.addProduction(ast -> ast.setCustom(new ExprStmt((Expr) ast.getChildrenCustom(0))), statement, expressionList, SM);
+            parser.addProduction(ast -> ast.setCustom(ast.getChildrenCustom(0)), statement, variableDefinition, SM);
 
             // elseStatement
-            parser.addProduction(elseStatement);
-            parser.addProduction(elseStatement, ELSE, compoundStatement);
+            parser.addProduction(ast -> ast.setCustom(new StmtList()), elseStatement);
+            parser.addProduction(ast -> ast.setCustom(ast.getChildrenCustom(1)), elseStatement, ELSE, compoundStatement);
 
             // condition
-            parser.addProduction(condition, LP, expression, RP);
+            parser.addProduction(ast -> ast.setCustom(ast.getChildrenCustom(1)), condition, LP, expressionList, RP);
 
             // expressionOpt
-            parser.addProduction(expressionOpt, expression);
-            parser.addProduction(expressionOpt);
+            parser.addProduction(ast -> ast.setCustom(ast.getChildrenCustom(0)), expressionListOpt, expressionList);
+            parser.addProduction(ast -> ast.setCustom(new ExprList()), expressionListOpt);
 
             // expression
-            parser.addProduction(expression, assignmentExpression);
-            parser.addProduction(expression, expression, CM, assignmentExpression);
+            parser.addProduction(ast -> {
+                ExprList exprList = new ExprList();
+                exprList.addExpr((Expr) ast.getChildrenCustom(0));
+                ast.setCustom(exprList);
+            }, expressionList, assignmentExpression);
+            parser.addProduction(ast -> {
+                ExprList exprList = (ExprList) ast.getChildrenCustom(0);
+                exprList.addExpr((Expr) ast.getChildrenCustom(2));
+                ast.setCustom(exprList);
+            }, expressionList, expressionList, CM, assignmentExpression);
 
             // assignmentExpression
-            parser.addProduction(assignmentExpression, rightHandExpression);
+            parser.addProduction(ast -> ast.setCustom(ast.getChildrenCustom(0)), assignmentExpression, rightHandExpression);
             // modify here assignmentExpression
-            parser.addProduction(assignmentExpression, leftHandExpression, ASN, assignmentExpression);
+            parser.addProduction(ast -> ast.setCustom(new AssigmentExpr((LeftHandExpr) ast.getChildrenCustom(0), (Expr) ast.getChildrenCustom(2))), assignmentExpression, leftHandExpression, ASN, assignmentExpression);
 
             // rightHandExpression
-            parser.addProduction(rightHandExpression, orExpression);
+            parser.addProduction(ast -> ast.setCustom(ast.getChildrenCustom(0)), rightHandExpression, orExpression);
 
             // orExpression
-            parser.addProduction(orExpression, andExpression);
-            parser.addProduction(orExpression, orExpression, OR, andExpression);
+            parser.addProduction(ast -> ast.setCustom(ast.getChildrenCustom(0)), orExpression, andExpression);
+            parser.addProduction(ast -> ast.setCustom(new BinaryExpr((Expr) ast.getChildrenCustom(0), (Expr) ast.getChildrenCustom(2), BinaryExpr.Op.OR)), orExpression, orExpression, OR, andExpression);
 
             // andExpression
-            parser.addProduction(andExpression, equalityExpression);
-            parser.addProduction(andExpression, andExpression, AND, equalityExpression);
+            parser.addProduction(ast -> ast.setCustom(ast.getChildrenCustom(0)), andExpression, equalityExpression);
+            parser.addProduction(ast -> ast.setCustom(new BinaryExpr((Expr) ast.getChildrenCustom(0), (Expr) ast.getChildrenCustom(2), BinaryExpr.Op.AND)), andExpression, andExpression, AND, equalityExpression);
 
             // equalityExpression
-            parser.addProduction(equalityExpression, relationalExpression);
-            parser.addProduction(equalityExpression, equalityExpression, EQ, relationalExpression);
-            parser.addProduction(equalityExpression, equalityExpression, NE, relationalExpression);
+            parser.addProduction(ast -> ast.setCustom(ast.getChildrenCustom(0)), equalityExpression, relationalExpression);
+            parser.addProduction(ast -> ast.setCustom(new BinaryExpr((Expr) ast.getChildrenCustom(0), (Expr) ast.getChildrenCustom(2), BinaryExpr.Op.EQ)), equalityExpression, equalityExpression, EQ, relationalExpression);
+            parser.addProduction(ast -> ast.setCustom(new BinaryExpr((Expr) ast.getChildrenCustom(0), (Expr) ast.getChildrenCustom(2), BinaryExpr.Op.NE)), equalityExpression, equalityExpression, NE, relationalExpression);
 
             // relationalExpression
-            parser.addProduction(relationalExpression, additiveExpression);
-            parser.addProduction(relationalExpression, relationalExpression, LT, additiveExpression);
-            parser.addProduction(relationalExpression, relationalExpression, LTE, additiveExpression);
-            parser.addProduction(relationalExpression, relationalExpression, GT, additiveExpression);
-            parser.addProduction(relationalExpression, relationalExpression, GTE, additiveExpression);
+            parser.addProduction(ast -> ast.setCustom(ast.getChildrenCustom(0)), relationalExpression, additiveExpression);
+            parser.addProduction(ast -> ast.setCustom(new BinaryExpr((Expr) ast.getChildrenCustom(0), (Expr) ast.getChildrenCustom(2), BinaryExpr.Op.LT)), relationalExpression, relationalExpression, LT, additiveExpression);
+            parser.addProduction(ast -> ast.setCustom(new BinaryExpr((Expr) ast.getChildrenCustom(0), (Expr) ast.getChildrenCustom(2), BinaryExpr.Op.LTE)), relationalExpression, relationalExpression, LTE, additiveExpression);
+            parser.addProduction(ast -> ast.setCustom(new BinaryExpr((Expr) ast.getChildrenCustom(0), (Expr) ast.getChildrenCustom(2), BinaryExpr.Op.GT)), relationalExpression, relationalExpression, GT, additiveExpression);
+            parser.addProduction(ast -> ast.setCustom(new BinaryExpr((Expr) ast.getChildrenCustom(0), (Expr) ast.getChildrenCustom(2), BinaryExpr.Op.GTE)), relationalExpression, relationalExpression, GTE, additiveExpression);
 
             // additiveExpression
-            parser.addProduction(additiveExpression, multiplicativeExpression);
-            parser.addProduction(additiveExpression, additiveExpression, PLUS, multiplicativeExpression);
-            parser.addProduction(additiveExpression, additiveExpression, MINUS, multiplicativeExpression);
+            parser.addProduction(ast -> ast.setCustom(ast.getChildrenCustom(0)), additiveExpression, multiplicativeExpression);
+            parser.addProduction(ast -> ast.setCustom(new BinaryExpr((Expr) ast.getChildrenCustom(0), (Expr) ast.getChildrenCustom(2), BinaryExpr.Op.ADD)), additiveExpression, additiveExpression, PLUS, multiplicativeExpression);
+            parser.addProduction(ast -> ast.setCustom(new BinaryExpr((Expr) ast.getChildrenCustom(0), (Expr) ast.getChildrenCustom(2), BinaryExpr.Op.SUB)), additiveExpression, additiveExpression, MINUS, multiplicativeExpression);
 
             // multiplicativeExpression
-            parser.addProduction(multiplicativeExpression, unaryExpression);
-            parser.addProduction(multiplicativeExpression, multiplicativeExpression, MUL, unaryExpression);
-            parser.addProduction(multiplicativeExpression, multiplicativeExpression, DIV, unaryExpression);
-            parser.addProduction(multiplicativeExpression, multiplicativeExpression, MOD, unaryExpression);
+            parser.addProduction(ast -> ast.setCustom(ast.getChildrenCustom(0)), multiplicativeExpression, unaryExpression);
+            parser.addProduction(ast -> ast.setCustom(new BinaryExpr((Expr) ast.getChildrenCustom(0), (Expr) ast.getChildrenCustom(2), BinaryExpr.Op.MUL)), multiplicativeExpression, multiplicativeExpression, MUL, unaryExpression);
+            parser.addProduction(ast -> ast.setCustom(new BinaryExpr((Expr) ast.getChildrenCustom(0), (Expr) ast.getChildrenCustom(2), BinaryExpr.Op.DIV)), multiplicativeExpression, multiplicativeExpression, DIV, unaryExpression);
+            parser.addProduction(ast -> ast.setCustom(new BinaryExpr((Expr) ast.getChildrenCustom(0), (Expr) ast.getChildrenCustom(2), BinaryExpr.Op.MOD)), multiplicativeExpression, multiplicativeExpression, MOD, unaryExpression);
 
             // unaryExpression
-            parser.addProduction(unaryExpression, leftHandExpression);
-            parser.addProduction(unaryExpression, MINUS, unaryExpression);
-            parser.addProduction(unaryExpression, NEW, unaryExpression);
-            parser.addProduction(unaryExpression, DELETE, leftHandExpression);
+            parser.addProduction(ast -> ast.setCustom(ast.getChildrenCustom(0)), unaryExpression, leftHandExpression);
+            parser.addProduction(ast -> ast.setCustom(new UnaryExpr((Expr) ast.getChildrenCustom(1), UnaryExpr.Op.MINUS)), unaryExpression, MINUS, unaryExpression);
+            // 不能 new new a.b().c()
+            parser.addProduction(ast -> ast.setCustom(new UnaryExpr((Expr) ast.getChildrenCustom(1), UnaryExpr.Op.NEW)), unaryExpression, NEW, leftHandExpression);
+            parser.addProduction(ast -> ast.setCustom(new UnaryExpr((Expr) ast.getChildrenCustom(1), UnaryExpr.Op.DELETE)), unaryExpression, DELETE, leftHandExpression);
 
             // leftHandExpression
-            parser.addProduction(leftHandExpression, primaryExpression);
-            parser.addProduction(leftHandExpression, leftHandExpression, memberOperator);
-            parser.addProduction(leftHandExpression, leftHandExpression, callOperator);
+            parser.addProduction(ast -> ast.setCustom(new LeftHandExpr((Expr) ast.getChildrenCustom(0))), leftHandExpression, primaryExpression);
+            parser.addProduction(ast -> {
+                LeftHandExpr leftHandExpr = (LeftHandExpr) ast.getChildrenCustom(0);
+                leftHandExpr.addOperator((LeftHandOperator) ast.getChildrenCustom(1));
+                ast.setCustom(leftHandExpr);
+            }, leftHandExpression, leftHandExpression, memberOperator);
+            parser.addProduction(ast -> {
+                LeftHandExpr leftHandExpr = (LeftHandExpr) ast.getChildrenCustom(0);
+                leftHandExpr.addOperator((LeftHandOperator) ast.getChildrenCustom(1));
+                ast.setCustom(leftHandExpr);
+            }, leftHandExpression, leftHandExpression, callOperator);
 
             // memberOperator
-            parser.addProduction(memberOperator, DOT, IDENTIFIER);
-            parser.addProduction(memberOperator, LB, expression, RB);
+            // a.xx 等效于 a['xx']
+            parser.addProduction(ast -> ast.setCustom(new MemberOperator(new Variable(new JString(ast.getChildrenTokenValue(1))))), memberOperator, DOT, IDENTIFIER);
+            parser.addProduction(ast -> ast.setCustom(new MemberOperator((Expr) ast.getChildrenCustom(1))), memberOperator, LB, expressionList, RB);
 
             // callOperator
-            parser.addProduction(callOperator, LP, argumentListOpt, RP);
+            parser.addProduction(ast -> {
+                ast.setCustom(new CallOperator((ArrayList<Expr>) ast.getChildrenCustom(1)));
+            }, callOperator, LP, argumentListOpt, RP);
 
             // argumentListOpt
-            parser.addProduction(argumentListOpt);
-            parser.addProduction(argumentListOpt, argumentList);
+            parser.addProduction(ast -> ast.setCustom(new ArrayList<Expr>()), argumentListOpt);
+            parser.addProduction(ast -> ast.setCustom(ast.getChildrenCustom(0)), argumentListOpt, argumentList);
 
             // argumentList
-            parser.addProduction(argumentList, argumentList, CM, assignmentExpression);
-            parser.addProduction(argumentList, assignmentExpression);
+            parser.addProduction(ast -> {
+                ArrayList<Expr> args = (ArrayList<Expr>) ast.getChildrenCustom(0);
+                args.add((Expr) ast.getChildrenCustom(2));
+                ast.setCustom(args);
+            }, argumentList, argumentList, CM, assignmentExpression);
+            parser.addProduction(ast -> {
+                ArrayList<Expr> args = new ArrayList<>();
+                args.add((Expr) ast.getChildrenCustom(0));
+                ast.setCustom(args);
+            }, argumentList, assignmentExpression);
 
             // primaryExpression
-            parser.addProduction(ast -> ast.setCustom(ast.getChildrenCustom(1)), primaryExpression, LP, expression, RP);
+            parser.addProduction(ast -> ast.setCustom(ast.getChildrenCustom(1)), primaryExpression, LP, expressionList, RP);
             parser.addProduction(ast -> ast.setCustom(new Variable(ast.getChildrenTokenValue(0))), primaryExpression, IDENTIFIER);
             parser.addProduction(ast -> ast.setCustom(new Variable(JNumber.fromTokenValue(ast.getChildrenTokenValue(0)))), primaryExpression, INTEGER);
-            parser.addProduction(ast -> ast.setCustom(new Variable(JNumber.fromTokenValue(ast.getChildrenTokenValue(0)))),primaryExpression, FLOAT);
-            parser.addProduction(ast -> ast.setCustom(new Variable(JString.fromTokenValue(ast.getChildrenTokenValue(0)))),primaryExpression, STRING);
-            parser.addProduction(ast -> ast.setCustom(JBoolean.FALSE), primaryExpression, FALSE);
-            parser.addProduction(ast -> ast.setCustom(JBoolean.TRUE), primaryExpression, TRUE);
-            parser.addProduction(ast -> ast.setCustom(JNull.NULL), primaryExpression, NULL);
+            parser.addProduction(ast -> ast.setCustom(new Variable(JNumber.fromTokenValue(ast.getChildrenTokenValue(0)))), primaryExpression, FLOAT);
+            parser.addProduction(ast -> ast.setCustom(new Variable(JString.fromTokenValue(ast.getChildrenTokenValue(0)))), primaryExpression, STRING);
+            parser.addProduction(ast -> ast.setCustom(new Variable(JBoolean.FALSE)), primaryExpression, FALSE);
+            parser.addProduction(ast -> ast.setCustom(new Variable(JBoolean.TRUE)), primaryExpression, TRUE);
+            parser.addProduction(ast -> ast.setCustom(new Variable(JNull.NULL)), primaryExpression, NULL);
             parser.addProduction(ast -> ast.setCustom(Variable.THIS), primaryExpression, THIS);
             parser.addProduction(ast -> ast.setCustom(ast.getChildrenCustom(0)), primaryExpression, objectLiteral);
             parser.addProduction(ast -> ast.setCustom(ast.getChildrenCustom(0)), primaryExpression, arrayLiteral);
@@ -284,12 +337,12 @@ public class MiniJS {
             // fieldList
             parser.addProduction(ast -> {
                 ObjectLiteralExpr objectLiteral = new ObjectLiteralExpr();
-                objectLiteral.addLiteral(ast.children.get(0).getChildrenTokenValue(0), (Expr) ast.children.get(0).getChildrenCustom(2));
+                objectLiteral.addLiteral((JString) ast.getChildrenCustom(0), (Expr) ast.children.get(0).getChildrenCustom(2));
                 ast.setCustom(objectLiteral);
             }, fieldList, literalField);
             parser.addProduction(ast -> {
                 ObjectLiteralExpr objectLiteral = (ObjectLiteralExpr) ast.getChildrenCustom(0);
-                objectLiteral.addLiteral(ast.children.get(2).getChildrenTokenValue(0), (Expr) ast.children.get(2).getChildrenCustom(2));
+                objectLiteral.addLiteral((JString) ast.getChildrenCustom(2), (Expr) ast.children.get(2).getChildrenCustom(2));
                 ast.setCustom(objectLiteral);
             }, fieldList, fieldList, CM, literalField);
 
@@ -319,17 +372,17 @@ public class MiniJS {
             // variableDeclarationList
             parser.addProduction(ast -> {
                 VariableDefinitionStmt variableDefinitionStmt = new VariableDefinitionStmt();
-                variableDefinitionStmt.addVariableDefinition(ast.children.get(0).getChildrenTokenValue(0), (Expr) ast.children.get(0).getChildrenCustom(1));
+                variableDefinitionStmt.addVariableDefinition((VariableDefinitionStmt.VariableDefinition) ast.getChildrenCustom(0));
                 ast.setCustom(variableDefinitionStmt);
             }, variableDeclarationList, variableDeclaration);
             parser.addProduction(ast -> {
                 VariableDefinitionStmt variableDefinitionStmt = (VariableDefinitionStmt) ast.getChildrenCustom(0);
-                variableDefinitionStmt.addVariableDefinition(ast.children.get(2).getChildrenTokenValue(0), (Expr) ast.children.get(2).getChildrenCustom(1));
+                variableDefinitionStmt.addVariableDefinition((VariableDefinitionStmt.VariableDefinition) ast.getChildrenCustom(2));
                 ast.setCustom(variableDefinitionStmt);
-            },variableDeclarationList, variableDeclarationList, CM, variableDeclaration);
+            }, variableDeclarationList, variableDeclarationList, CM, variableDeclaration);
 
             // variableDeclaration
-            parser.addProduction(variableDeclaration, IDENTIFIER, variableInitializer);
+            parser.addProduction(ast -> ast.setCustom(new VariableDefinitionStmt.VariableDefinition(ast.getChildrenTokenValue(0), (Expr) ast.getChildrenCustom(1))), variableDeclaration, IDENTIFIER, variableInitializer);
 
             // variableInitializer
             parser.addProduction(ast -> ast.setCustom(null), variableInitializer);
@@ -410,13 +463,14 @@ public class MiniJS {
                                 
                                
                 b = test;
-                (b)(a, 123, 3 + 1)[asd].asd = {"asd": "asd", a: null};
-                """);
-        // System.out.println(ast.generateDOTFile());
-
-        ast = MiniJS.parse("""
-                {"a": 1};
+                (b)(a, 123, 3 + 1)[asd].asd = {"asd": "asd", a: null}['asd'];
                 """);
         System.out.println(ast.generateDOTFile());
+
+        ast = MiniJS.parse("""
+                return 1 + 1 * 199 / 2;
+                """);
+        System.out.println(ast.generateDOTFile());
+        System.out.println(((Program) ast.getCustom()).eval().toJString().toString());
     }
 }

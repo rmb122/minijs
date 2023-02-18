@@ -1,4 +1,4 @@
 package com.rmb122.minijs.vm.eval;
 
-public abstract class Stmt implements Evaluable {
+public interface Stmt {
 }

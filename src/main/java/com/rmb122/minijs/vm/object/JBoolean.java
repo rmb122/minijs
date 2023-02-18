@@ -9,6 +9,14 @@ public class JBoolean implements JBaseObject {
     private JBoolean() {
     }
 
+    public static JBoolean valueOf(boolean value) {
+        return value ? TRUE : FALSE;
+    }
+
+    public static JBoolean valueOf(JNumber value) {
+        return JBoolean.valueOf(value.getValue() > 0);
+    }
+
     @Override
     public JNumber toJNumber() throws JException {
         if (this == TRUE) {
@@ -29,5 +37,9 @@ public class JBoolean implements JBaseObject {
         } else {
             throw new JException("invalid JBoolean value");
         }
+    }
+
+    public boolean toPrimitive() {
+        return this == TRUE;
     }
 }

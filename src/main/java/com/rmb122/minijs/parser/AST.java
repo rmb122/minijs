@@ -32,6 +32,10 @@ public class AST {
         this.custom = custom;
     }
 
+    public Object getCustom() {
+        return this.custom;
+    }
+
     public Object getChildrenCustom(int idx) {
         return this.children.get(idx).custom;
     }

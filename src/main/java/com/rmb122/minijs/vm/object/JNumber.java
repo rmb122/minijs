@@ -1,6 +1,7 @@
 package com.rmb122.minijs.vm.object;
 
-import com.rmb122.minijs.lexer.TokenValue;
+import java.util.Objects;
+import java.util.Stack;
 
 public class JNumber implements JBaseObject {
     private final double value;
@@ -10,6 +11,10 @@ public class JNumber implements JBaseObject {
         this.value = value;
     }
 
+    public double getValue() {
+        return this.value;
+    }
+
     @Override
     public JNumber toJNumber() {
         return this;
@@ -17,7 +22,21 @@ public class JNumber implements JBaseObject {
 
     @Override
     public JString toJString() {
-        return new JString(Double.toString(this.value));
+        if (Math.ceil(this.value) == Math.floor(this.value)) {
+            return new JString(Long.toString((long) this.value));
+        } else {
+            return new JString(String.format("%f", this.value));
+        }
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hashCode(this.value);
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        return obj instanceof JNumber jNumber && this.value == jNumber.getValue();
     }
 
     public static JNumber fromTokenValue(String tokenValue) {

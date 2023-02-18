@@ -1,6 +1,5 @@
 package com.rmb122.minijs.vm.object;
 
-import com.rmb122.minijs.lexer.TokenValue;
 import org.apache.commons.text.StringEscapeUtils;
 
 public class JString implements JBaseObject {
@@ -12,6 +11,10 @@ public class JString implements JBaseObject {
 
     @Override
     public JNumber toJNumber() {
+        if (this.value.length() == 0) {
+            return new JNumber(0);
+        }
+
         try {
             return new JNumber(Double.parseDouble(this.toString()));
         } catch (NumberFormatException e) {

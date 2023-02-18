@@ -7,7 +7,7 @@ import com.rmb122.minijs.vm.object.JBaseObject;
 
 import java.util.ArrayList;
 
-public class ArrayLiteralExpr extends Expr {
+public class ArrayLiteralExpr implements Expr {
     private final ArrayList<Expr> values = new ArrayList<>();
 
     public void addLiteral(Expr value) {

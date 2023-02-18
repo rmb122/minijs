@@ -5,7 +5,7 @@ import com.rmb122.minijs.vm.JException;
 import com.rmb122.minijs.vm.object.JBaseObject;
 import com.rmb122.minijs.vm.object.JUndefine;
 
-public class Variable extends LeftHandExpr {
+public class Variable implements Expr {
     public enum Type {
         INSTANT,
         IDENTIFIER,
@@ -15,9 +15,9 @@ public class Variable extends LeftHandExpr {
     public static final Variable THIS = new Variable(Type.THIS);
 
     // 当前变量类型
-    Type type;
-    JBaseObject jObject;
-    String id;
+    private final Type type;
+    private JBaseObject jObject;
+    private String id;
 
     public Variable(JBaseObject jObject) {
         this.type = Type.INSTANT;
@@ -33,21 +33,25 @@ public class Variable extends LeftHandExpr {
         this.type = type;
     }
 
+    public Type getType() {
+        return type;
+    }
+
+    public String getId() {
+        return id;
+    }
+
     @Override
     public JBaseObject eval(Context context) throws JException {
         switch (this.type) {
             case THIS -> {
-                return context.currFrame.thisObject;
+                return context.getThis();
             }
             case INSTANT -> {
                 return this.jObject;
             }
             case IDENTIFIER -> {
-                if (context.currFrame.variables.containsKey(id)) {
-                    return context.currFrame.variables.get(id);
-                } else {
-                    return context.globalThis.getOrDefault(id, JUndefine.UNDEFINE);
-                }
+                return context.getVariable(this.id);
             }
             default -> throw new JException("Unexpected var type");
         }
