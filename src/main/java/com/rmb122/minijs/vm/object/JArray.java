@@ -28,7 +28,7 @@ public class JArray extends JObject {
     public JBaseObject set(JString name, JBaseObject value) throws JException {
         if (name.equals(LENGTH_KEY)) {
             try {
-                int length = Integer.parseInt(value.toString());
+                int length = Integer.parseInt(value.toJString().toString());
                 this.adjustLength(length);
                 return value;
             } catch (NumberFormatException e) {
