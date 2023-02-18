@@ -41,6 +41,8 @@ public class LeftHandExpr implements Expr {
                 object = object.get(memberOperator.eval(context).toJString());
             } else if (leftHandOperator instanceof CallOperator callOperator) {
                 object = object.call(context, thisObject, callOperator.getArgs(context));
+                // call 完之后重置 thisObject a.b()()
+                thisObject = context.getThis();
             } else {
                 throw new JException("Unexpected operator type");
             }
