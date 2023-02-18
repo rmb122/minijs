@@ -32,7 +32,7 @@ public class LeftHandExpr implements Expr {
     }
 
     public JBaseObject getObject(Context context, int operatorLength) throws JException {
-        JBaseObject thisObject = context.getThis();
+        JBaseObject thisObject = context.getGlobalThis();
         JBaseObject object = baseExpr.eval(context);
 
         for (LeftHandOperator leftHandOperator : operators.subList(0, operatorLength)) {
