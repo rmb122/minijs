@@ -30,3 +30,26 @@ function test() {
 }
 
 test();
+
+function test2() {
+    var a = 1;
+    if (a == 1) {
+        console.log(1);
+    }
+
+    if (a == 2) {
+        console.log(2);
+    } else {
+        return 5;
+    }
+
+    console.log(3);
+}
+
+console.log(test2());
+
+function test3() {
+    console.log(1);
+}
+
+console.log(test3());
