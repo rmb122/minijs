@@ -10,11 +10,11 @@ public interface JBaseObject {
         throw new JException(String.format("Cannot read properties of %s (reading %s)", this.toJString(), name));
     }
 
-    default JBaseObject set(JString name, JBaseObject value) throws JException {
+    default void set(JString name, JBaseObject value) throws JException {
         throw new JException(String.format("Cannot set properties of %s (setting %s)", this.toJString(), name));
     }
 
-    default JBaseObject remove(JString name) throws JException {
+    default void remove(JString name) throws JException {
         throw new JException(String.format("Cannot remove properties of %s (removing %s)", this.toJString(), name));
     }
 

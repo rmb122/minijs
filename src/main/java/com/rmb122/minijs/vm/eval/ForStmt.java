@@ -37,7 +37,6 @@ public class ForStmt implements Stmt, LoopStmt {
         this.bodyStmts = bodyStmts;
     }
 
-
     @Override
     public void init(Context context) throws JException {
         switch (this.type) {
@@ -48,7 +47,12 @@ public class ForStmt implements Stmt, LoopStmt {
 
     @Override
     public boolean stopped(Context context) throws JException {
-        return !JBoolean.valueOf(this.conditionExpr.eval(context).toJNumber()).toPrimitive();
+        // for (;;) 死循环
+        if (conditionExpr.isEmpty()) {
+            return false;
+        } else {
+            return !JBoolean.valueOf(this.conditionExpr.eval(context).toJNumber()).toPrimitive();
+        }
     }
 
     @Override

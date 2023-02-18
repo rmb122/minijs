@@ -22,4 +22,8 @@ public class ExprList implements Expr {
         }
         return returnValue;
     }
+
+    public boolean isEmpty() {
+        return this.exprs.isEmpty();
+    }
 }

@@ -1,8 +1,9 @@
 package com.rmb122.minijs.vm;
 
-import com.rmb122.minijs.vm.object.*;
+import com.rmb122.minijs.vm.object.JBaseObject;
+import com.rmb122.minijs.vm.object.JObject;
+import com.rmb122.minijs.vm.object.JString;
 
-import java.util.HashMap;
 import java.util.Stack;
 
 public class Context {

@@ -351,7 +351,14 @@ public class MiniJS {
 
             // literalField
             parser.addProduction(ast -> ast.setCustom(new JString(ast.getChildrenTokenValue(0))), literalField, IDENTIFIER, CN, assignmentExpression);
+            parser.addProduction(ast -> ast.setCustom(new JString(ast.getChildrenTokenValue(0))), literalField, INTEGER, CN, assignmentExpression);
+            parser.addProduction(ast -> ast.setCustom(new JString(ast.getChildrenTokenValue(0))), literalField, FLOAT, CN, assignmentExpression);
+            parser.addProduction(ast -> ast.setCustom(new JString(ast.getChildrenTokenValue(0))), literalField, NAN, CN, assignmentExpression);
             parser.addProduction(ast -> ast.setCustom(JString.fromTokenValue(ast.getChildrenTokenValue(0))), literalField, STRING, CN, assignmentExpression);
+            parser.addProduction(ast -> ast.setCustom(new JString(ast.getChildrenTokenValue(0))), literalField, FALSE, CN, assignmentExpression);
+            parser.addProduction(ast -> ast.setCustom(new JString(ast.getChildrenTokenValue(0))), literalField, TRUE, CN, assignmentExpression);
+            parser.addProduction(ast -> ast.setCustom(new JString(ast.getChildrenTokenValue(0))), literalField, NULL, CN, assignmentExpression);
+            parser.addProduction(ast -> ast.setCustom(new JString(ast.getChildrenTokenValue(0))), literalField, THIS, CN, assignmentExpression);
 
             // arrayLiteral
             parser.addProduction(ast -> ast.setCustom(new ArrayLiteralExpr()), arrayLiteral, LB, RB);

@@ -15,13 +15,13 @@ public class JObject implements JBaseObject {
     }
 
     @Override
-    public JBaseObject set(JString name, JBaseObject value) throws JException {
-        return values.put(name, value);
+    public void set(JString name, JBaseObject value) throws JException {
+        values.put(name, value);
     }
 
     @Override
-    public JBaseObject remove(JString name) {
-        return values.remove(name);
+    public void remove(JString name) {
+        values.remove(name);
     }
 
     @Override

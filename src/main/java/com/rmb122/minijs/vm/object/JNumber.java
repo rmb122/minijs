@@ -1,7 +1,7 @@
 package com.rmb122.minijs.vm.object;
 
+import java.math.BigDecimal;
 import java.util.Objects;
-import java.util.Stack;
 
 public class JNumber implements JBaseObject {
     private final double value;
@@ -23,7 +23,7 @@ public class JNumber implements JBaseObject {
     @Override
     public JString toJString() {
         if (Math.ceil(this.value) == Math.floor(this.value)) {
-            return new JString(Long.toString((long) this.value));
+            return new JString(BigDecimal.valueOf(this.value).toBigInteger().toString());
         } else {
             return new JString(String.format("%f", this.value));
         }

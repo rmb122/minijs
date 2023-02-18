@@ -25,12 +25,11 @@ public class JArray extends JObject {
     }
 
     @Override
-    public JBaseObject set(JString name, JBaseObject value) throws JException {
+    public void set(JString name, JBaseObject value) throws JException {
         if (name.equals(LENGTH_KEY)) {
             try {
                 int length = Integer.parseInt(value.toJString().toString());
                 this.adjustLength(length);
-                return value;
             } catch (NumberFormatException e) {
                 throw new JException("Invalid array length");
             }
@@ -38,11 +37,18 @@ public class JArray extends JObject {
 
         try {
             int index = Integer.parseInt(name.toString());
-            this.adjustLength(index + 1);
-            return this.array.set(index, value);
-        } catch (NumberFormatException e) {
-            return super.set(name, value);
+
+            if (index >= 0) {
+                if (index + 1 > this.length()) {
+                    this.adjustLength(index + 1);
+                }
+                this.array.set(index, value);
+                return;
+            }
+        } catch (NumberFormatException ignored) {
         }
+
+        super.set(name, value);
     }
 
     @Override
@@ -53,14 +59,37 @@ public class JArray extends JObject {
 
         try {
             int index = Integer.parseInt(name.toString());
-            if (index < this.length()) {
-                return this.array.get(index);
-            } else {
-                return JUndefine.UNDEFINE;
+            if (index >= 0) {
+                if (index < this.length()) {
+                    return this.array.get(index);
+                } else {
+                    return JUndefine.UNDEFINE;
+                }
             }
-        } catch (NumberFormatException e) {
-            return super.get(name);
+        } catch (NumberFormatException ignored) {
         }
+
+        return super.get(name);
+    }
+
+    @Override
+    public void remove(JString name) {
+        if (name.equals(LENGTH_KEY)) {
+            return;
+        }
+
+        try {
+            int index = Integer.parseInt(name.toString());
+            if (index >= 0) {
+                if (index < this.length()) {
+                    this.array.set(index, JUndefine.UNDEFINE);
+                }
+                return;
+            }
+        } catch (NumberFormatException ignored) {
+        }
+
+        super.remove(name);
     }
 
     public int length() {

@@ -25,7 +25,7 @@ public class AssigmentExpr implements Expr {
                 variable.getType() == Variable.Type.IDENTIFIER) {
             // 如果 Operators 为空, 那么 base 必须是个变量
             context.setVariable(variable.getId(), value);
-        } else if (operators.get(operators.size() - 1) instanceof MemberOperator lastMember) {
+        } else if (operators.size() > 0 && operators.get(operators.size() - 1) instanceof MemberOperator lastMember) {
             // Operators 不为空, 最后一个必须是 MemberOperator
             JBaseObject object = leftHandExpr.getObject(context, operators.size() - 1);
             object.set(lastMember.eval(context).toJString(), value);

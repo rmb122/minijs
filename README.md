@@ -18,6 +18,7 @@ LR1 语法分析, 目前没有实现自举, 需要使用 Java 语言调用相关
 
 MiniJS 的文法, 为 Javascript 的一个子集, 仅有少部分功能可以使用  
 例如:  
+
 * 没有变量提升
 * 没有匿名函数
 * 没有 let / const
@@ -25,8 +26,7 @@ MiniJS 的文法, 为 Javascript 的一个子集, 仅有少部分功能可以使
 * 没有异常处理
 * 受限制的 new 语法
 * 必须以分号结束语句
-...
-
+* ...
 
 ## vm
 
@@ -34,4 +34,12 @@ MiniJS 的文法, 为 Javascript 的一个子集, 仅有少部分功能可以使
 
 ## usage
 
+编译
+```sh
+mvn package -DskipTests
+```
 
+运行 (需要 Java 版本大于等于 17)
+```sh
+java -jar target/minijs-1.0-SNAPSHOT-jar-with-dependencies.jar src/test/minijs/simple.js
+```
