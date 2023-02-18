@@ -26,6 +26,7 @@ MiniJS 的文法, 为 Javascript 的一个子集, 仅有少部分功能可以使
 * 没有异常处理
 * 受限制的 new 语法
 * 必须以分号结束语句
+* 内置函数目前只有 console.log
 * ...
 
 ## vm
@@ -43,3 +44,19 @@ mvn package -DskipTests
 ```sh
 java -jar target/minijs-1.0-SNAPSHOT-jar-with-dependencies.jar src/test/minijs/simple.js
 ```
+
+## example
+
+```js
+function fibonacci(n) {
+    if (n <= 1) {
+        return n;
+    }
+    return fibonacci(n - 1) + fibonacci(n - 2);
+}
+
+var result = fibonacci(32);
+console.log(result);
+```
+
+输出 2178309
