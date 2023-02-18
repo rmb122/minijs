@@ -64,6 +64,7 @@ public class MiniJS {
     public static final Token EQ = new Token("EQ");
     public static final Token NE = new Token("NE");
     public static final Token VAR = new Token("VAR");
+    public static final Token NAN = new Token("NAN");
 
     public static final Symbol program = new Symbol("program");
     public static final Symbol function = new Symbol("function");
@@ -152,6 +153,7 @@ public class MiniJS {
             lexer.addToken("==", EQ);
             lexer.addToken("!=", NE);
             lexer.addToken("var", VAR);
+            lexer.addToken("NaN", NAN);
 
             // program
             parser.addProduction(ast -> ast.setCustom(new Program()), program);
@@ -322,6 +324,7 @@ public class MiniJS {
             parser.addProduction(ast -> ast.setCustom(new Variable(ast.getChildrenTokenValue(0))), primaryExpression, IDENTIFIER);
             parser.addProduction(ast -> ast.setCustom(new Variable(JNumber.fromTokenValue(ast.getChildrenTokenValue(0)))), primaryExpression, INTEGER);
             parser.addProduction(ast -> ast.setCustom(new Variable(JNumber.fromTokenValue(ast.getChildrenTokenValue(0)))), primaryExpression, FLOAT);
+            parser.addProduction(ast -> ast.setCustom(new Variable(JNumber.NAN)), primaryExpression, NAN);
             parser.addProduction(ast -> ast.setCustom(new Variable(JString.fromTokenValue(ast.getChildrenTokenValue(0)))), primaryExpression, STRING);
             parser.addProduction(ast -> ast.setCustom(new Variable(JBoolean.FALSE)), primaryExpression, FALSE);
             parser.addProduction(ast -> ast.setCustom(new Variable(JBoolean.TRUE)), primaryExpression, TRUE);
