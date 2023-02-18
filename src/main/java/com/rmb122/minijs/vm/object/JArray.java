@@ -47,6 +47,10 @@ public class JArray extends JObject {
 
     @Override
     public JBaseObject get(JString name) {
+        if (name.equals(LENGTH_KEY)) {
+            return new JNumber(this.length());
+        }
+
         try {
             int index = Integer.parseInt(name.toString());
             if (index < this.length()) {
