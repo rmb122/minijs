@@ -43,10 +43,7 @@ public class Symbol implements Symbolize {
 
     @Override
     public boolean equals(Object obj) {
-        if (obj instanceof Symbol s && ((this.special && s.special) || (!this.special && !s.special))) {
-            return this.name.equals(s.name);
-        }
-        return false;
+        return obj instanceof Symbol s && this.special == s.special && this.name.equals(s.name);
     }
 
     @Override
