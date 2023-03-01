@@ -29,7 +29,7 @@ public class Rune {
 
     @Override
     public boolean equals(Object obj) {
-        return obj instanceof Rune r && ((!this.unique && r.c == this.c) || (this == obj));
+        return obj instanceof Rune r && ((!this.unique && !r.unique && r.c == this.c) || (this == obj));
     }
 
     @Override

@@ -9,26 +9,26 @@ public class Symbol implements Symbolize {
 
     boolean terminating;
     String name;
-    boolean unique;
+    boolean special;
 
     // 创建终结符
     public Symbol(Token token) {
         this.terminating = true;
         this.name = token.getName();
-        this.unique = false;
+        this.special = false;
     }
 
     // 创建非终结符
     public Symbol(String name) {
         this.terminating = false;
         this.name = name;
-        this.unique = false;
+        this.special = false;
     }
 
-    private Symbol(boolean terminating, String name, boolean unique) {
+    private Symbol(boolean terminating, String name, boolean special) {
         this.terminating = terminating;
         this.name = name;
-        this.unique = false;
+        this.special = special;
     }
 
     @Override
@@ -43,11 +43,14 @@ public class Symbol implements Symbolize {
 
     @Override
     public boolean equals(Object obj) {
-        return obj instanceof Symbol s && (this.unique ? s.unique : this.name.equals(s.name));
+        if (obj instanceof Symbol s && ((this.special && s.special) || (!this.special && !s.special))) {
+            return this.name.equals(s.name);
+        }
+        return false;
     }
 
     @Override
     public int hashCode() {
-        return this.unique ? super.hashCode() : this.name.hashCode();
+        return this.special ? super.hashCode() : this.name.hashCode();
     }
 }
